@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from 'react';
+import { memo, useState } from 'react';
 import type { ChatNode, Speaker } from '../../types/chat';
 import { MessageContent } from './MessageContent';
 import { MessageMeta } from './MessageMeta';
@@ -47,20 +47,20 @@ export const MessageItem = memo(function MessageItem({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(node.message);
 
-  const handleStartEdit = useCallback(() => {
+  const handleStartEdit = () => {
     setEditContent(node.message);
     setIsEditing(true);
-  }, [node.message]);
+  };
 
-  const handleSaveEdit = useCallback(() => {
+  const handleSaveEdit = () => {
     onEdit(node.id, editContent);
     setIsEditing(false);
-  }, [node.id, editContent, onEdit]);
+  };
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = () => {
     setIsEditing(false);
     setEditContent(node.message);
-  }, [node.message]);
+  };
 
   const alignmentClass = speaker.is_user ? 'message-item--user' : 'message-item--bot';
 
@@ -74,6 +74,7 @@ export const MessageItem = memo(function MessageItem({
       
       <div className="message-body">
         <MessageContent
+          nodeId={node.id}
           content={isEditing ? editContent : node.message}
           isEditing={isEditing}
           onEditChange={setEditContent}

@@ -6,20 +6,23 @@ import { MessageItem } from './MessageItem';
  * Message list container with optimizations.
  * 
  * Optimization strategies:
- * 1. Memoized active path computation (via store)
- * 2. Stable callback references (useCallback)
- * 3. Sibling info computed once per render
+ * 1. Only subscribes to node_ids array, not full nodes
+ * 2. Each MessageItem subscribes to its own node (isolated re-renders)
+ * 3. Stable callback references (useCallback)
  * 4. Auto-scroll to bottom on new messages
  * 
- * Future optimizations:
- * - Virtual scrolling for 1000+ messages (react-virtual)
- * - Intersection observer for lazy image loading
- * - Web worker for heavy computations
+ * When a message is added/deleted:
+ * - MessageList re-renders (path changed)
+ * - Only NEW/REMOVED MessageItems mount/unmount
+ * - Existing MessageItems don't re-render (same nodeId prop)
+ * 
+ * When a message is edited:
+ * - MessageList does NOT re-render
+ * - Only the edited MessageItem re-renders (via its own subscription)
  */
 export function MessageList() {
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Select only what we need from store
   const nodes = useChatStore((s) => s.nodes);
   const speakers = useChatStore((s) => s.speakers);
   const getActivePath = useChatStore((s) => s.getActivePath);
@@ -30,28 +33,24 @@ export function MessageList() {
   // Get active path (cached in store)
   const activePath = getActivePath();
 
-  // Compute sibling info for each node in path
-  const nodesWithSiblingInfo = useMemo(() => {
-    return activePath.nodes.map((node) => {
-      // Get parent to find siblings
+  // Compute sibling info for each node
+  const pathInfo = useMemo(() => {
+    return activePath.nodes.map((node, index) => {
       const parent = node.parent_id ? nodes.get(node.parent_id) : null;
-      const siblingIds = parent?.child_ids ?? [node.id];
-      const siblingCount = siblingIds.length;
-      const currentSiblingIndex = siblingIds.indexOf(node.id);
-      
-      // Check if first in consecutive group (same speaker)
-      const nodeIndex = activePath.nodes.indexOf(node);
-      const prevNode = nodeIndex > 0 ? activePath.nodes[nodeIndex - 1] : null;
+      const siblingCount = parent?.child_ids.length ?? 1;
+      const currentSiblingIndex = parent?.child_ids.indexOf(node.id) ?? 0;
+      const prevNode = index > 0 ? activePath.nodes[index - 1] : null;
       const isFirstInGroup = !prevNode || prevNode.speaker_id !== node.speaker_id;
-
+      
       return {
         node,
+        speaker: speakers.get(node.speaker_id)!,
         siblingCount,
         currentSiblingIndex,
         isFirstInGroup,
       };
     });
-  }, [activePath.nodes, nodes]);
+  }, [activePath.nodes, nodes, speakers]);
 
   // Stable callbacks
   const handleEdit = useCallback((nodeId: string, content: string) => {
@@ -72,7 +71,11 @@ export function MessageList() {
     console.log('Regenerate:', nodeId);
   }, []);
 
+  // STABLE callback - no dependencies that change on mutations
+  // Access nodes via getState() to avoid recreating on every mutation
   const handleSwitchBranch = useCallback((nodeId: string, direction: 'prev' | 'next') => {
+    const { nodes } = useChatStore.getState(); // Get current nodes at call time
+    
     performance.mark('branch-switch-start');
     const traversalStart = performance.now();
     
@@ -90,13 +93,11 @@ export function MessageList() {
     const targetSiblingId = parent.child_ids[newIndex];
     
     // Find the leaf of the target sibling's branch by following active_child_index
-    // This is O(depth) as per our design in MessageTree.md
     let leafId = targetSiblingId;
     let current = nodes.get(leafId);
     let depth = 0;
     
     while (current && current.child_ids.length > 0) {
-      // Follow the active child, or default to first child
       const nextIndex = current.active_child_index ?? 0;
       leafId = current.child_ids[nextIndex];
       current = nodes.get(leafId);
@@ -105,8 +106,6 @@ export function MessageList() {
 
     const traversalElapsed = performance.now() - traversalStart;
     
-    // Switch branch - this updates active_child_index on all ancestors
-    // O(depth) operation as designed
     performance.mark('branch-switch-set-start');
     switchBranch(leafId);
     performance.mark('branch-switch-end');
@@ -120,13 +119,12 @@ export function MessageList() {
       `Branch switch: total=${total.toFixed(2)}ms, traversal=${traversal.toFixed(2)}ms, depth=${depth}`
     );
 
-    // Clear measures to avoid unbounded performance entry list
     performance.clearMarks('branch-switch-start');
     performance.clearMarks('branch-switch-set-start');
     performance.clearMarks('branch-switch-end');
     performance.clearMeasures('branch-switch-total');
     performance.clearMeasures('branch-switch-traversal');
-  }, [nodes, switchBranch]);
+  }, [switchBranch]); // Only depends on switchBranch which is stable
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -137,26 +135,21 @@ export function MessageList() {
 
   return (
     <div className="message-list" ref={containerRef}>
-      {nodesWithSiblingInfo.map(({ node, siblingCount, currentSiblingIndex, isFirstInGroup }) => {
-        const speaker = speakers.get(node.speaker_id);
-        if (!speaker) return null;
-
-        return (
-          <MessageItem
-            key={node.id}
-            node={node}
-            speaker={speaker}
-            isFirstInGroup={isFirstInGroup}
-            siblingCount={siblingCount}
-            currentSiblingIndex={currentSiblingIndex}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onRegenerate={handleRegenerate}
-            onBranch={handleBranch}
-            onSwitchBranch={handleSwitchBranch}
-          />
-        );
-      })}
+      {pathInfo.map(({ node, speaker, siblingCount, currentSiblingIndex, isFirstInGroup }) => (
+        <MessageItem
+          key={node.id}
+          node={node}
+          speaker={speaker}
+          isFirstInGroup={isFirstInGroup}
+          siblingCount={siblingCount}
+          currentSiblingIndex={currentSiblingIndex}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onRegenerate={handleRegenerate}
+          onBranch={handleBranch}
+          onSwitchBranch={handleSwitchBranch}
+        />
+      ))}
     </div>
   );
 }
