@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useRef, useEffect, useState } from 'react';
+import { useCallback, useMemo, useRef, useEffect, useState, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { useChatStore } from '../../store/chatStore';
 import { useMessageStyleStore } from '../../store/messageStyleStore';
 import { MessageItem } from './MessageItem';
+import { pickRandomMessage } from '../../utils/generateDemoData';
 
 /**
  * Message list container with optimizations.
@@ -20,6 +21,28 @@ import { MessageItem } from './MessageItem';
 export function MessageList() {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  
+  // Scroll anchoring state for branch switching
+  const pendingScrollAnchor = useRef<{
+    parentId: string;          // Parent of the branched node (stable reference)
+    offsetFromTop: number;     // Where the branched item was on screen (relative to viewport)
+    viewportTop: number;       // Element's top relative to document
+    direction: 'prev' | 'next'; // Direction of the switch for animation
+  } | null>(null);
+  
+  // Flag to prevent auto-scroll from interfering with branch switch scroll restoration
+  const skipAutoScrollRef = useRef(false);
+  
+  // Animation state for branch switching
+  const [branchAnimation, setBranchAnimation] = useState<{
+    active: boolean;
+    direction: 'prev' | 'next';
+    parentId: string;  // Parent of branch point - messages after this should animate
+  } | null>(null);
+  
+  // Get animation settings
+  const branchSwitchAnimation = useMessageStyleStore((s) => s.config.animation.branchSwitchAnimation);
+  const animationsEnabled = useMessageStyleStore((s) => s.config.animation.enabled);
   
   // Only subscribe to containerWidth from store (for initial value and settings panel sync)
   const storedWidth = useMessageStyleStore((s) => s.config.layout.containerWidth);
@@ -173,6 +196,48 @@ export function MessageList() {
     console.log('Create branch from:', nodeId);
   }, []);
 
+  // Create a new branch with demo content
+  const handleCreateBranch = useCallback((nodeId: string) => {
+    const { nodes, speakers, addMessage, switchBranch } = useChatStore.getState();
+    const node = nodes.get(nodeId);
+    if (!node?.parent_id) return;
+    
+    const parent = nodes.get(node.parent_id);
+    if (!parent) return;
+    
+    // Capture scroll anchor BEFORE creating the new branch (same as handleSwitchBranch)
+    const container = containerRef.current;
+    const branchedElement = container?.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null;
+    
+    if (branchedElement && container) {
+      const containerRect = container.getBoundingClientRect();
+      const elementRect = branchedElement.getBoundingClientRect();
+      pendingScrollAnchor.current = {
+        parentId: node.parent_id,
+        offsetFromTop: elementRect.top - containerRect.top,
+        viewportTop: elementRect.top,
+        direction: 'next', // Creating new branch is always "next"
+      };
+      skipAutoScrollRef.current = true;
+      
+      // Trigger animation if enabled
+      if (animationsEnabled && branchSwitchAnimation !== 'none') {
+        setBranchAnimation({ active: true, direction: 'next', parentId: node.parent_id });
+      }
+    }
+    
+    // Get the original speaker info to determine if user or bot
+    const speaker = speakers.get(node.speaker_id);
+    const isUser = speaker?.is_user ?? false;
+    
+    // Create new sibling message with random demo content
+    const newContent = `[Branch] ${pickRandomMessage(isUser)}`;
+    const newId = addMessage(node.parent_id, newContent, node.speaker_id, node.is_bot);
+    
+    // Switch to the new branch
+    switchBranch(newId);
+  }, []);
+
   const handleRegenerate = useCallback((nodeId: string) => {
     // Will trigger AI regeneration
     console.log('Regenerate:', nodeId);
@@ -182,9 +247,6 @@ export function MessageList() {
   // Access nodes via getState() to avoid recreating on every mutation
   const handleSwitchBranch = useCallback((nodeId: string, direction: 'prev' | 'next') => {
     const { nodes } = useChatStore.getState(); // Get current nodes at call time
-    
-    performance.mark('branch-switch-start');
-    const traversalStart = performance.now();
     
     const node = nodes.get(nodeId);
     if (!node?.parent_id) return;
@@ -197,48 +259,187 @@ export function MessageList() {
     
     if (newIndex < 0 || newIndex >= parent.child_ids.length) return;
 
+    // Capture the BRANCHED element's position BEFORE switching
+    // We anchor on the current sibling that's being switched away from
+    const container = containerRef.current;
+    const branchedElement = container?.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null;
+    
+    if (branchedElement && container) {
+      const containerRect = container.getBoundingClientRect();
+      const elementRect = branchedElement.getBoundingClientRect();
+      // Store the parent ID (to find the new sibling after switch) and position
+      // We capture both the offset within container AND the absolute viewport position
+      pendingScrollAnchor.current = {
+        parentId: node.parent_id,
+        offsetFromTop: elementRect.top - containerRect.top,
+        viewportTop: elementRect.top,  // Absolute position on screen
+        direction,
+      };
+      // Prevent auto-scroll from interfering
+      skipAutoScrollRef.current = true;
+      
+      // Trigger animation if enabled
+      if (animationsEnabled && branchSwitchAnimation !== 'none') {
+        setBranchAnimation({ active: true, direction, parentId: node.parent_id });
+      }
+    }
+
     const targetSiblingId = parent.child_ids[newIndex];
     
     // Find the leaf of the target sibling's branch by following active_child_index
     let leafId = targetSiblingId;
     let current = nodes.get(leafId);
-    let depth = 0;
     
     while (current && current.child_ids.length > 0) {
       const nextIndex = current.active_child_index ?? 0;
       leafId = current.child_ids[nextIndex];
       current = nodes.get(leafId);
-      depth++;
     }
 
-    const traversalElapsed = performance.now() - traversalStart;
-    
-    performance.mark('branch-switch-set-start');
     switchBranch(leafId);
-    performance.mark('branch-switch-end');
-    performance.measure('branch-switch-total', 'branch-switch-start', 'branch-switch-end');
-    performance.measure('branch-switch-traversal', 'branch-switch-start', 'branch-switch-set-start');
-
-    const total = performance.getEntriesByName('branch-switch-total').pop()?.duration ?? 0;
-    const traversal = performance.getEntriesByName('branch-switch-traversal').pop()?.duration ?? traversalElapsed;
-
-    console.log(
-      `Branch switch: total=${total.toFixed(2)}ms, traversal=${traversal.toFixed(2)}ms, depth=${depth}`
-    );
-
-    performance.clearMarks('branch-switch-start');
-    performance.clearMarks('branch-switch-set-start');
-    performance.clearMarks('branch-switch-end');
-    performance.clearMeasures('branch-switch-total');
-    performance.clearMeasures('branch-switch-traversal');
   }, [switchBranch]); // Only depends on switchBranch which is stable
 
-  // Auto-scroll to bottom when messages change
+  // Restore scroll position after branch switch (runs synchronously after DOM update)
+  useLayoutEffect(() => {
+    const anchor = pendingScrollAnchor.current;
+    const container = containerRef.current;
+    
+    if (!anchor || !container) return;
+    
+    // Clear anchor to prevent re-triggering (but leave skipAutoScrollRef for useEffect to handle)
+    pendingScrollAnchor.current = null;
+    
+    // Find the NEW sibling in the path (the child of parentId that's now active)
+    // Look through the rendered path to find which node has parentId as its parent
+    const parentIndex = activePath.node_ids.findIndex(id => id === anchor.parentId);
+    if (parentIndex === -1 || parentIndex >= activePath.node_ids.length - 1) return;
+    
+    // The new sibling is the node right after the parent in the path
+    const newSiblingId = activePath.node_ids[parentIndex + 1];
+    const anchorElement = container.querySelector(`[data-node-id="${newSiblingId}"]`) as HTMLElement | null;
+    if (!anchorElement) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = anchorElement.getBoundingClientRect();
+    const currentOffsetFromTop = elementRect.top - containerRect.top;
+    
+    // Calculate scroll adjustment to restore original position
+    const scrollDelta = currentOffsetFromTop - anchor.offsetFromTop;
+    const targetScrollTop = container.scrollTop + scrollDelta;
+    
+    // Check if we can actually scroll to this position
+    const maxScrollTop = container.scrollHeight - container.clientHeight;
+    const minScrollTop = 0;
+    
+    if (targetScrollTop >= minScrollTop && targetScrollTop <= maxScrollTop) {
+      // We can maintain the position - instant snap (no animation needed)
+      // Temporarily disable smooth scroll to ensure instant positioning
+      const prevScrollBehavior = container.style.scrollBehavior;
+      container.style.scrollBehavior = 'auto';
+      container.scrollTop = targetScrollTop;
+      container.style.scrollBehavior = prevScrollBehavior;
+    } else {
+      // Not enough content to maintain position
+      // Use CSS transform to create the illusion of smooth movement
+      
+      // First, scroll to the closest valid position (disable smooth scroll for instant positioning)
+      const clampedScrollTop = Math.max(minScrollTop, Math.min(maxScrollTop, targetScrollTop));
+      const prevScrollBehavior = container.style.scrollBehavior;
+      container.style.scrollBehavior = 'auto';
+      container.scrollTop = clampedScrollTop;
+      container.style.scrollBehavior = prevScrollBehavior;
+      
+      // Calculate how much we're "off" from the desired position
+      const overshoot = targetScrollTop - clampedScrollTop;
+      
+      if (Math.abs(overshoot) > 1) {
+        // Apply a transform to offset all messages, making element appear at original position
+        // Need to force reflow between setting initial state and starting animation
+        container.style.transition = 'none';
+        container.style.transform = `translateY(${-overshoot}px)`;
+        
+        // Force reflow to ensure transform is applied before animation starts
+        void container.offsetHeight;
+        
+        // Now animate back to natural position
+        container.style.transition = 'transform 300ms ease-out';
+        container.style.transform = 'translateY(0)';
+        
+        // Clean up after animation
+        const cleanup = () => {
+          container.style.transition = '';
+          container.style.transform = '';
+          container.removeEventListener('transitionend', cleanup);
+        };
+        container.addEventListener('transitionend', cleanup);
+        
+        // Fallback cleanup in case transitionend doesn't fire
+        setTimeout(cleanup, 350);
+      }
+    }
+  }, [activePath.node_ids]); // Trigger when path changes
+
+  // Auto-scroll to bottom when NEW messages are added (not branch switches)
+  const prevPathRef = useRef<string[]>(activePath.node_ids);
   useEffect(() => {
-    if (containerRef.current) {
+    const prevIds = prevPathRef.current;
+    const currentIds = activePath.node_ids;
+    
+    // Skip auto-scroll if this was a branch switch (handled by useLayoutEffect above)
+    if (skipAutoScrollRef.current) {
+      skipAutoScrollRef.current = false;
+      prevPathRef.current = currentIds;
+      return;
+    }
+    
+    // Only auto-scroll if:
+    // 1. Length increased (new message added), OR
+    // 2. Last message changed and new path is longer (appended to different branch)
+    const lengthIncreased = currentIds.length > prevIds.length;
+    const lastChanged = currentIds.length > 0 && prevIds.length > 0 && 
+                        currentIds[currentIds.length - 1] !== prevIds[prevIds.length - 1];
+    
+    if ((lengthIncreased || (lastChanged && lengthIncreased)) && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [activePath.node_ids.length]);
+    prevPathRef.current = currentIds;
+  }, [activePath.node_ids]);
+
+  // Clear animation state after animation completes
+  useEffect(() => {
+    if (branchAnimation?.active) {
+      const timer = setTimeout(() => {
+        setBranchAnimation(null);
+      }, 300); // Match animation duration
+      return () => clearTimeout(timer);
+    }
+  }, [branchAnimation]);
+
+  // Check if a message should be animated (at or after the branch point)
+  const shouldAnimateMessage = useCallback((nodeIndex: number): boolean => {
+    if (!branchAnimation?.active) return false;
+    if (branchSwitchAnimation === 'none') return false;
+    
+    // Find the index of the parent in the path
+    const parentIndex = activePath.node_ids.indexOf(branchAnimation.parentId);
+    // Animate messages AFTER the parent (the branch point and everything below)
+    return parentIndex !== -1 && nodeIndex > parentIndex;
+  }, [branchAnimation, branchSwitchAnimation, activePath.node_ids]);
+  
+  // Get animation class for a message
+  const getAnimationClass = useCallback((nodeIndex: number): string => {
+    if (!shouldAnimateMessage(nodeIndex)) return '';
+    
+    if (branchSwitchAnimation === 'slide') {
+      return branchAnimation!.direction === 'next' 
+        ? 'branch-animate-slide-from-right'
+        : 'branch-animate-slide-from-left';
+    }
+    if (branchSwitchAnimation === 'fade') {
+      return 'branch-animate-fade';
+    }
+    return '';
+  }, [shouldAnimateMessage, branchSwitchAnimation, branchAnimation]);
 
   return (
     <div 
@@ -264,21 +465,26 @@ export function MessageList() {
       
       {/* Message container */}
       <div className="message-list" ref={containerRef}>
-        {pathInfo.map(({ node, speaker, siblingCount, currentSiblingIndex, isFirstInGroup }) => (
-          <MessageItem
-            key={node.id}
-            node={node}
-            speaker={speaker}
-            isFirstInGroup={isFirstInGroup}
-            siblingCount={siblingCount}
-            currentSiblingIndex={currentSiblingIndex}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onRegenerate={handleRegenerate}
-            onBranch={handleBranch}
-            onSwitchBranch={handleSwitchBranch}
-          />
-        ))}
+        {pathInfo.map(({ node, speaker, siblingCount, currentSiblingIndex, isFirstInGroup }, index) => {
+          const animClass = getAnimationClass(index);
+          return (
+            <div key={node.id} className={animClass || undefined}>
+              <MessageItem
+                node={node}
+                speaker={speaker}
+                isFirstInGroup={isFirstInGroup}
+                siblingCount={siblingCount}
+                currentSiblingIndex={currentSiblingIndex}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onRegenerate={handleRegenerate}
+                onBranch={handleBranch}
+                onSwitchBranch={handleSwitchBranch}
+                onCreateBranch={handleCreateBranch}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

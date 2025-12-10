@@ -26,6 +26,7 @@ import type {
   TimestampPosition,
   Transition,
   NewMessageAnimation,
+  BranchSwitchAnimation,
   EditStyle,
   EditButtonPosition,
 } from '../../types/messageStyle';
@@ -673,6 +674,20 @@ export function MessageStyleSettings() {
             <option value="none">None</option>
             <option value="fade-in">Fade In</option>
             <option value="slide-up">Slide Up</option>
+          </select>
+        </label>
+      </div>
+
+      <div>
+        <label>
+          Branch Switch Animation:
+          <select
+            value={config.animation.branchSwitchAnimation}
+            onChange={(e) => setAnimation({ branchSwitchAnimation: e.target.value as BranchSwitchAnimation })}
+          >
+            <option value="none">None (instant)</option>
+            <option value="slide">Slide (directional)</option>
+            <option value="fade">Fade (crossfade)</option>
           </select>
         </label>
       </div>

@@ -8,7 +8,6 @@ import { MessageActions } from './MessageActions';
 import {
   useLayoutConfig,
   useActionsConfig,
-  useBranchConfig,
   useEditConfig,
 } from '../../store/messageStyleStore';
 import { gapMap, paddingMap } from '../../types/messageStyle';
@@ -24,6 +23,7 @@ interface MessageItemProps {
   onRegenerate?: (nodeId: string) => void;
   onBranch: (nodeId: string) => void;
   onSwitchBranch: (nodeId: string, direction: 'prev' | 'next') => void;
+  onCreateBranch: (nodeId: string) => void;
   onCopy?: (nodeId: string) => void;
 }
 
@@ -48,11 +48,11 @@ export const MessageItem = memo(function MessageItem({
   onRegenerate,
   onBranch,
   onSwitchBranch,
+  onCreateBranch,
   onCopy,
 }: MessageItemProps) {
   const layout = useLayoutConfig();
   const actionsConfig = useActionsConfig();
-  const branchConfig = useBranchConfig();
   const editConfig = useEditConfig();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -169,6 +169,7 @@ export const MessageItem = memo(function MessageItem({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       data-hovered={isHovered}
+      data-node-id={node.id}
     >
       {/* Meta section - avatar, name, timestamp */}
       {(layout.metaPosition === 'left' || layout.metaPosition === 'above') && (
@@ -180,6 +181,13 @@ export const MessageItem = memo(function MessageItem({
       )}
       
       <div className="message-body" style={bodyStyle}>
+        {/* Branch counter badge - shows when multiple branches exist */}
+        {siblingCount > 1 && (
+          <span className="branch-counter-badge">
+            {currentSiblingIndex + 1}/{siblingCount}
+          </span>
+        )}
+        
         {/* Inline meta (name before text) */}
         {layout.metaPosition === 'inline' && isFirstInGroup && (
           <MessageMeta
@@ -203,32 +211,29 @@ export const MessageItem = memo(function MessageItem({
             <button onClick={handleCancelEdit}>Cancel</button>
           </div>
         ) : (
-          <>
-            {/* Branch indicator with hover visibility */}
-            <div style={branchConfig.visibility === 'hover' ? hoverVisibleStyle : undefined}>
-              <MessageBranchIndicator
-                nodeId={node.id}
-                siblingCount={siblingCount}
-                currentIndex={currentSiblingIndex}
-                onSwitchBranch={onSwitchBranch}
-              />
-            </div>
-            
-            {/* Actions with hover visibility */}
-            <div style={actionsConfig.visibility === 'hover' ? hoverVisibleStyle : undefined}>
-              <MessageActions
-                nodeId={node.id}
-                isBot={node.is_bot}
-                onEdit={handleStartEdit}
-                onDelete={onDelete}
-                onRegenerate={node.is_bot ? onRegenerate : undefined}
-                onBranch={onBranch}
-                onCopy={handleCopy}
-              />
-            </div>
-          </>
+          /* Actions with hover visibility */
+          <div style={actionsConfig.visibility === 'hover' ? hoverVisibleStyle : undefined}>
+            <MessageActions
+              nodeId={node.id}
+              isBot={node.is_bot}
+              onEdit={handleStartEdit}
+              onDelete={onDelete}
+              onRegenerate={node.is_bot ? onRegenerate : undefined}
+              onBranch={onBranch}
+              onCopy={handleCopy}
+            />
+          </div>
         )}
       </div>
+      
+      {/* Branch chevrons at left/right edges */}
+      <MessageBranchIndicator
+        nodeId={node.id}
+        siblingCount={siblingCount}
+        currentIndex={currentSiblingIndex}
+        onSwitchBranch={onSwitchBranch}
+        onCreateBranch={onCreateBranch}
+      />
     </div>
   );
 });

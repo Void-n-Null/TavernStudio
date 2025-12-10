@@ -101,11 +101,13 @@ export interface TimestampConfig {
 // ============ Animation ============
 export type Transition = 'none' | 'fade' | 'slide';
 export type NewMessageAnimation = 'none' | 'fade-in' | 'slide-up';
+export type BranchSwitchAnimation = 'none' | 'slide' | 'fade';
 
 export interface AnimationConfig {
   enabled: boolean;
   hoverTransition: Transition;
   newMessageAnimation: NewMessageAnimation;
+  branchSwitchAnimation: BranchSwitchAnimation;
 }
 
 // ============ Edit Mode ============
@@ -194,6 +196,7 @@ export const defaultAnimation: AnimationConfig = {
   enabled: true,
   hoverTransition: 'fade',
   newMessageAnimation: 'fade-in',
+  branchSwitchAnimation: 'slide',
 };
 
 export const defaultEdit: EditConfig = {
