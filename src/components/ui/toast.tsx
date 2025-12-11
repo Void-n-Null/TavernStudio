@@ -4,7 +4,6 @@
  */
 
 import { create } from 'zustand';
-import { useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { X, Check, AlertTriangle, Info } from 'lucide-react';
 

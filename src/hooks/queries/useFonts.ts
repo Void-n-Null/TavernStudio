@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fonts, type FontMeta } from '../../api/client';
+import { fonts } from '../../api/client';
 
 export const fontKeys = {
   all: ['fonts'] as const,

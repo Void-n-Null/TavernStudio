@@ -23,17 +23,6 @@ function optimisticallyCloseQuotes(content: string): string {
   return content;
 }
 
-function analyzeFences(raw: string) {
-  const fenceCount = (raw.match(/```/g) || []).length;
-  return {
-    fenceCount,
-    hasFence: fenceCount > 0,
-    openFenceOnOwnLine: /\n```/.test(raw),
-    closeFenceOnOwnLine: /\n```\s*$/.test(raw),
-    lastFenceIndex: raw.lastIndexOf('```'),
-  };
-}
-
 function unwrapMdQuotes(element: HTMLElement) {
   const spans = Array.from(element.querySelectorAll('span.md-quote'));
   for (const span of spans) {
@@ -144,10 +133,6 @@ export const StreamingMarkdown = memo(function StreamingMarkdown({
   useEffect(() => {
     // Subscribe to raw content updates
     const unsubscribe = subscribeToContent((_html, raw) => {
-      // #region agent log (hypothesis A/B)
-      const a = analyzeFences(raw);
-      fetch('http://127.0.0.1:7242/ingest/d54406b6-69ad-486f-a813-cd243ee8a1af',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'pre',hypothesisId:(a.hasFence?'A':'B'),location:'src/components/chat/StreamingMarkdown.tsx:79',message:'streaming raw update',data:{len:raw.length,...a,tail:raw.slice(-40)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       // Coalesce setState to one per frame; streaming can be character-by-character.
       pendingRawRef.current = raw;
       if (rafRef.current == null) {
