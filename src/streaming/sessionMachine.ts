@@ -69,13 +69,6 @@ function pickSpeakerId(
   return input;
 }
 
-function findNodeByClientId(nodes: Map<string, ChatNode>, clientId: string): ChatNode | null {
-  for (const n of nodes.values()) {
-    if (n.client_id === clientId || n.id === clientId) return n;
-  }
-  return null;
-}
-
 /**
  * Dependency-free streaming session state machine.
  *
@@ -191,11 +184,10 @@ export function createStreamingSessionMachine(deps: StreamingSessionDeps): Strea
       // Treat as cancel-like cleanup: stop streaming UI and delete placeholder.
       cancelStoreIfActive(s.nodeClientId);
 
-      const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
-      if (node) {
-        // Best-effort immediate cleanup (optimistic removal). This can race the create and 404.
-        void deps.deleteMessage(node.id).catch(() => {});
-      }
+      // Always attempt to remove the placeholder immediately by the session's client id.
+      // This covers the "start + cancel in the same tick" case where the optimistic
+      // node exists in the query cache but `deps.getNodes()` hasn't re-derived yet.
+      void deps.deleteMessage(s.nodeClientId).catch(() => {});
 
       // Important: always clean up the server-created row once it lands,
       // even if a new streaming session starts later.
@@ -243,11 +235,10 @@ export function createStreamingSessionMachine(deps: StreamingSessionDeps): Strea
     // Stop streaming immediately (UI) for this session’s node.
     cancelStoreIfActive(s.nodeClientId);
 
-    const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
-    if (node) {
-      // Best-effort immediate cleanup (optimistic removal). This can race the create and 404.
-      void deps.deleteMessage(node.id).catch(() => {});
-    }
+    // Always attempt to remove the placeholder immediately by the session's client id.
+    // This covers the "start + cancel in the same tick" case where the optimistic
+    // node exists in the query cache but `deps.getNodes()` hasn't re-derived yet.
+    void deps.deleteMessage(s.nodeClientId).catch(() => {});
 
     // Important: always clean up the server-created row once it lands,
     // even if a new streaming session starts later.

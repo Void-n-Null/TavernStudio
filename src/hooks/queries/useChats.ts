@@ -250,31 +250,38 @@ export function useDeleteMessage(chatId: string) {
       return chats.deleteMessage(chatId, nodeId);
     },
     
-    onMutate: async (nodeId) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.chats.detail(chatId) });
+    onMutate: (nodeId) => {
+      // Cancel outgoing refetches (don't await: we want optimistic removal immediately,
+      // otherwise fast cancel can race and briefly leave phantom placeholder rows).
+      void queryClient.cancelQueries({ queryKey: queryKeys.chats.detail(chatId) });
       
       const previous = queryClient.getQueryData<ChatFull>(queryKeys.chats.detail(chatId));
       
       if (previous) {
+        // Support deleting by either server id or client_id (important for streaming placeholders
+        // where the id can be rewritten but the client_id stays stable).
+        const deletedNode =
+          previous.nodes.find((n) => n.id === nodeId || n.client_id === nodeId) ?? null;
+        const targetId = deletedNode?.id ?? nodeId;
+
         // Collect node and all descendants to delete
         const toDelete = new Set<string>();
         const collectDescendants = (id: string) => {
           toDelete.add(id);
-          const node = previous.nodes.find(n => n.id === id);
+          const node = previous.nodes.find((n) => n.id === id);
           node?.child_ids.forEach(collectDescendants);
         };
-        collectDescendants(nodeId);
+        collectDescendants(targetId);
         
         // Find the node's parent to update its child_ids
-        const deletedNode = previous.nodes.find(n => n.id === nodeId);
-        const parentId = deletedNode?.parent_id;
+        const parentId = deletedNode?.parent_id ?? null;
         
         // Filter out deleted nodes and update parent
         const updatedNodes = previous.nodes
           .filter(n => !toDelete.has(n.id))
           .map(node => {
             if (node.id === parentId) {
-              const newChildIds = node.child_ids.filter(cid => cid !== nodeId);
+              const newChildIds = node.child_ids.filter((cid) => cid !== targetId);
               return {
                 ...node,
                 child_ids: newChildIds,
