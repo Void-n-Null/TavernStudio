@@ -1,14 +1,26 @@
 /* Message List Container */
 .message-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 6px;
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
   /* scroll-behavior: smooth - removed for better programmatic scroll control */
   background-color: #1e1e1e0f;
+}
+
+/* Inner wrapper: owns layout (gap + padding) so the scroll container can be observed/stabilized */
+.message-list-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 6px;
+  min-height: 100%;
+}
+
+/* Invisible marker at the end of the list (used for bottom detection/observation) */
+.message-list-bottom-sentinel {
+  height: 0px;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 /* "Load more" indicator at top of message list */

@@ -30,6 +30,8 @@ const LOAD_MORE_BATCH = 50;
  */
 export function MessageList() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   
   // Scroll anchoring state for branch switching
@@ -42,6 +44,31 @@ export function MessageList() {
   
   // Flag to prevent auto-scroll from interfering with branch switch scroll restoration
   const skipAutoScrollRef = useRef(false);
+
+  // ============ Pinned-to-bottom scroll follow ============
+  // If true, keep the scroll pinned to the bottom as content grows (e.g. streaming).
+  // The moment the user scrolls up, disable follow until they return to bottom.
+  const followRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
+  const userScrollIntentRef = useRef(false);
+  const userScrollIntentTimeoutRef = useRef<number | null>(null);
+  const followScrollRafRef = useRef<number | null>(null);
+
+  const scheduleScrollToBottom = useCallback(() => {
+    if (followScrollRafRef.current != null) return;
+    if (typeof requestAnimationFrame !== 'function') return;
+    followScrollRafRef.current = requestAnimationFrame(() => {
+      followScrollRafRef.current = null;
+      const container = containerRef.current;
+      if (!container) return;
+      if (!followRef.current) return;
+      if (skipAutoScrollRef.current) return;
+
+      // Clamp to bottom.
+      container.scrollTop = container.scrollHeight;
+      lastScrollTopRef.current = container.scrollTop;
+    });
+  }, []);
   
   // Animation state for branch switching
   const [branchAnimation, setBranchAnimation] = useState<{
@@ -92,6 +119,107 @@ export function MessageList() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Keep the viewport pinned to the bottom while following, even when content height changes
+  // without React re-rendering (streaming markdown, image loads, etc).
+  useEffect(() => {
+    const contentEl = contentRef.current;
+    if (!contentEl) return;
+
+    if (typeof ResizeObserver !== 'function') {
+      // No ResizeObserver: we still have the "new message" auto-scroll below, but streaming
+      // height changes won't be perfectly pinned on ancient browsers.
+      return;
+    }
+
+    const ro = new ResizeObserver(() => {
+      // Avoid yanking during branch-switch scroll restoration.
+      if (skipAutoScrollRef.current) return;
+      if (!followRef.current) return;
+      scheduleScrollToBottom();
+    });
+
+    ro.observe(contentEl);
+
+    // Initial pin (e.g., first load of a long chat).
+    scheduleScrollToBottom();
+
+    return () => {
+      ro.disconnect();
+      if (followScrollRafRef.current != null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(followScrollRafRef.current);
+        followScrollRafRef.current = null;
+      }
+    };
+  }, [scheduleScrollToBottom]);
+
+  // Track whether user is "following" the bottom based on scroll behavior.
+  // This is input-agnostic: wheel, touch, scrollbar drag will all count as "user intent".
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const REENABLE_AT_BOTTOM_PX = 8;
+    const INTENT_TTL_MS = 160;
+
+    const distanceToBottom = () => container.scrollHeight - container.clientHeight - container.scrollTop;
+    const isAtBottom = () => distanceToBottom() <= REENABLE_AT_BOTTOM_PX;
+
+    const markUserIntent = () => {
+      userScrollIntentRef.current = true;
+      if (userScrollIntentTimeoutRef.current != null) {
+        window.clearTimeout(userScrollIntentTimeoutRef.current);
+      }
+      userScrollIntentTimeoutRef.current = window.setTimeout(() => {
+        userScrollIntentRef.current = false;
+        userScrollIntentTimeoutRef.current = null;
+      }, INTENT_TTL_MS);
+    };
+
+    const handleScroll = () => {
+      const current = container.scrollTop;
+      const prev = lastScrollTopRef.current;
+      const delta = current - prev;
+
+      if (followRef.current) {
+        // Disengage the instant the user scrolls up.
+        if (userScrollIntentRef.current && delta < 0) {
+          followRef.current = false;
+        }
+      } else {
+        // Re-engage only when the user returns to (basically) the bottom.
+        if (isAtBottom()) {
+          followRef.current = true;
+        }
+      }
+
+      lastScrollTopRef.current = current;
+    };
+
+    // Initialize refs from current scroll position.
+    lastScrollTopRef.current = container.scrollTop;
+
+    // Scroll events on the container.
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Mark intent for the common input modalities.
+    container.addEventListener('wheel', markUserIntent, { passive: true });
+    container.addEventListener('touchstart', markUserIntent, { passive: true });
+    container.addEventListener('touchmove', markUserIntent, { passive: true });
+    container.addEventListener('pointerdown', markUserIntent, { passive: true });
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('wheel', markUserIntent);
+      container.removeEventListener('touchstart', markUserIntent);
+      container.removeEventListener('touchmove', markUserIntent);
+      container.removeEventListener('pointerdown', markUserIntent);
+      if (userScrollIntentTimeoutRef.current != null) {
+        window.clearTimeout(userScrollIntentTimeoutRef.current);
+        userScrollIntentTimeoutRef.current = null;
+      }
+    };
   }, []);
   
   // Handle drag start - capture initial position and width
@@ -286,12 +414,17 @@ export function MessageList() {
   ]);
 
   // When dividers are enabled, we want *divider-controlled* spacing (not the fixed CSS gap).
-  const messageListStyle: CSSProperties = useMemo(() => {
+  const messageListContainerStyle: CSSProperties = useMemo(() => {
     return {
       ...messageListBackgroundStyle,
-      ...(showMessageDividers ? { gap: 0 } : null),
     };
-  }, [messageListBackgroundStyle, showMessageDividers]);
+  }, [messageListBackgroundStyle]);
+
+  const messageListContentStyle: CSSProperties = useMemo(() => {
+    // `.message-list-content` owns the fixed CSS gap; when dividers are enabled, we zero it out
+    // so spacing comes from the divider renderer instead.
+    return showMessageDividers ? { gap: 0 } : {};
+  }, [showMessageDividers]);
 
   const queryClient = useQueryClient();
 
@@ -578,38 +711,20 @@ export function MessageList() {
     }
   }, [activeNodeIds]); // Trigger when path changes
 
-  // Auto-scroll to bottom when NEW messages are added (not branch switches)
-  const prevPathRef = useRef<string[]>(activeNodeIds);
+  // Clear the "skip" flag after branch-switch scroll restoration has run.
+  // We keep it alive through the paint so ResizeObserver-based follow won't fight it.
   useEffect(() => {
-    const prevIds = prevPathRef.current;
-    const currentIds = activeNodeIds;
-    const container = containerRef.current;
-
-    // Only auto-scroll if:
-    // 1. Length increased (new message added), OR
-    // 2. Last message changed and new path is longer (appended to different branch)
-    const lengthIncreased = currentIds.length > prevIds.length;
-    const lastChanged =
-      currentIds.length > 0 &&
-      prevIds.length > 0 &&
-      currentIds[currentIds.length - 1] !== prevIds[prevIds.length - 1];
-    
-    // Skip auto-scroll if this was a branch switch (handled by useLayoutEffect above)
-    if (skipAutoScrollRef.current) {
+    if (!skipAutoScrollRef.current) return;
+    if (typeof requestAnimationFrame !== 'function') {
       skipAutoScrollRef.current = false;
-      prevPathRef.current = currentIds;
       return;
     }
-    
-    if ((lengthIncreased || (lastChanged && lengthIncreased)) && container) {
-      // Only follow if user is already near the bottom.
-      const nearBottom = (container.scrollHeight - container.clientHeight - container.scrollTop) <= 80;
-      if (nearBottom) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }
-    
-    prevPathRef.current = currentIds;
+    const id = requestAnimationFrame(() => {
+      skipAutoScrollRef.current = false;
+    });
+    return () => {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id);
+    };
   }, [activeNodeIds]);
 
   // Clear animation state after animation completes
@@ -675,65 +790,70 @@ export function MessageList() {
       )}
       
       {/* Message container */}
-      <div className="message-list" ref={containerRef} style={messageListStyle}>
-        {/* Dynamic markdown styles based on config */}
-        <MarkdownStyles />
-        
-        {/* Load more indicator - shown when there are hidden messages */}
-        {visibleNodeIds.hiddenCount > 0 && (
-          <div className="message-list-load-more" onClick={handleLoadMore}>
-            ↑ Load {Math.min(LOAD_MORE_BATCH, visibleNodeIds.hiddenCount)} more messages ({visibleNodeIds.hiddenCount} hidden)
-          </div>
-        )}
-        
-        {visibleNodeIds.ids.map((nodeId, localIndex) => {
-          // Convert local index to global index for animation calculations
-          const globalIndex = visibleNodeIds.startIndex + localIndex;
-          const animClass = getAnimationClass(globalIndex);
-          const prevNodeId = globalIndex > 0 ? activeNodeIds[globalIndex - 1] : null;
-          const nextNodeId = localIndex < visibleNodeIds.ids.length - 1 ? visibleNodeIds.ids[localIndex + 1] : null;
+      <div className="message-list" ref={containerRef} style={messageListContainerStyle}>
+        <div className="message-list-content" ref={contentRef} style={messageListContentStyle}>
+          {/* Dynamic markdown styles based on config */}
+          <MarkdownStyles />
+          
+          {/* Load more indicator - shown when there are hidden messages */}
+          {visibleNodeIds.hiddenCount > 0 && (
+            <div className="message-list-load-more" onClick={handleLoadMore}>
+              ↑ Load {Math.min(LOAD_MORE_BATCH, visibleNodeIds.hiddenCount)} more messages ({visibleNodeIds.hiddenCount} hidden)
+            </div>
+          )}
+          
+          {visibleNodeIds.ids.map((nodeId, localIndex) => {
+            // Convert local index to global index for animation calculations
+            const globalIndex = visibleNodeIds.startIndex + localIndex;
+            const animClass = getAnimationClass(globalIndex);
+            const prevNodeId = globalIndex > 0 ? activeNodeIds[globalIndex - 1] : null;
+            const nextNodeId = localIndex < visibleNodeIds.ids.length - 1 ? visibleNodeIds.ids[localIndex + 1] : null;
 
-          // Divider/spacer between rows (never after the last visible row)
-          let separator: ReactNode = null;
-          if (showMessageDividers && nextNodeId) {
-            if (layoutConfig.dividerMode === 'messages') {
-              separator = (
-                <div className="message-divider" style={separatorStyles.dividerMessage} aria-hidden="true" />
-              );
-            } else {
-              const isBoundary = !layoutConfig.groupConsecutive
-                ? true
-                : speakerIdByNodeId.get(nodeId) !== speakerIdByNodeId.get(nextNodeId);
-
-              if (isBoundary) {
+            // Divider/spacer between rows (never after the last visible row)
+            let separator: ReactNode = null;
+            if (showMessageDividers && nextNodeId) {
+              if (layoutConfig.dividerMode === 'messages') {
                 separator = (
-                  <div className="message-divider" style={separatorStyles.dividerGroup} aria-hidden="true" />
+                  <div className="message-divider" style={separatorStyles.dividerMessage} aria-hidden="true" />
                 );
-              } else if (separatorStyles.messageGapPx !== '0px') {
-                separator = <div style={separatorStyles.spacer} aria-hidden="true" />;
+              } else {
+                const isBoundary = !layoutConfig.groupConsecutive
+                  ? true
+                  : speakerIdByNodeId.get(nodeId) !== speakerIdByNodeId.get(nextNodeId);
+
+                if (isBoundary) {
+                  separator = (
+                    <div className="message-divider" style={separatorStyles.dividerGroup} aria-hidden="true" />
+                  );
+                } else if (separatorStyles.messageGapPx !== '0px') {
+                  separator = <div style={separatorStyles.spacer} aria-hidden="true" />;
+                }
               }
             }
-          }
-          // Use animation ID in key to ensure animation only runs once per switch
-          // When animClass is set, key includes animation ID so element is fresh
-          // When animClass is cleared, key reverts to just node.id (stable)
-          const key = animClass && branchAnimation ? `${nodeId}-anim-${branchAnimation.id}` : nodeId;
-          return (
-            <div key={key} className={animClass || undefined}>
-              <MessageItemRow
-                nodeId={nodeId}
-                prevNodeId={prevNodeId}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onRegenerate={handleRegenerate}
-                onBranch={handleBranch}
-                onSwitchBranch={handleSwitchBranch}
-                onCreateBranch={handleCreateBranch}
-              />
-              {separator}
-            </div>
-          );
-        })}
+            // Use animation ID in key to ensure animation only runs once per switch
+            // When animClass is set, key includes animation ID so element is fresh
+            // When animClass is cleared, key reverts to just node.id (stable)
+            const key = animClass && branchAnimation ? `${nodeId}-anim-${branchAnimation.id}` : nodeId;
+            return (
+              <div key={key} className={animClass || undefined}>
+                <MessageItemRow
+                  nodeId={nodeId}
+                  prevNodeId={prevNodeId}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onRegenerate={handleRegenerate}
+                  onBranch={handleBranch}
+                  onSwitchBranch={handleSwitchBranch}
+                  onCreateBranch={handleCreateBranch}
+                />
+                {separator}
+              </div>
+            );
+          })}
+
+          {/* Used for bottom detection/observation (no visual) */}
+          <div className="message-list-bottom-sentinel" ref={bottomSentinelRef} aria-hidden="true" />
+        </div>
       </div>
     </div>
   );
