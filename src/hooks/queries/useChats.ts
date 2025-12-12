@@ -101,9 +101,10 @@ export function useAddMessage(chatId: string) {
       id?: string;
     }) => chats.addMessage(chatId, params.parentId, params.content, params.speakerId, params.isBot, params.createdAt, params.id),
     
-    onMutate: async (params) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.chats.detail(chatId) });
+    onMutate: (params) => {
+      // Cancel outgoing refetches (don't await: we want optimistic insert immediately,
+      // otherwise streaming cancel can race and leave a phantom placeholder).
+      void queryClient.cancelQueries({ queryKey: queryKeys.chats.detail(chatId) });
       
       // Snapshot previous value
       const previous = queryClient.getQueryData<ChatFull>(queryKeys.chats.detail(chatId));

@@ -26,6 +26,8 @@ export interface StreamingMessage extends StreamingMeta {
 
 /** Raw content buffer - updated on every append, no re-renders */
 let contentBuffer = '';
+/** Pending chunks since last flush (avoid O(n^2) string concat) */
+let pendingChunks: string[] = [];
 
 /** Listeners for content updates (DOM refs subscribe here) */
 type ContentListener = (raw: string) => void;
@@ -37,6 +39,8 @@ const contentListeners = new Set<ContentListener>();
  * We instead coalesce updates to at most once per animation frame.
  */
 let flushScheduled = false;
+let flushHandle: number | null = null;
+let flushHandleKind: 'raf' | 'timeout' | null = null;
 
 /** Subscribe to content updates (for ref-based DOM updates) */
 export function subscribeToContent(listener: ContentListener): () => void {
@@ -51,7 +55,24 @@ function notifyContentListeners() {
 
 /** Get current raw content (for persistence) */
 export function getStreamingContent(): string {
+  // Ensure we don't drop content if someone finalizes before the next scheduled flush.
+  if (pendingChunks.length > 0) {
+    contentBuffer += pendingChunks.join('');
+    pendingChunks = [];
+  }
   return contentBuffer;
+}
+
+function cancelPendingFlush(): void {
+  if (flushHandle == null) return;
+  if (flushHandleKind === 'raf' && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(flushHandle);
+  } else if (flushHandleKind === 'timeout') {
+    clearTimeout(flushHandle);
+  }
+  flushHandle = null;
+  flushHandleKind = null;
+  flushScheduled = false;
 }
 
 // ============ Zustand store (minimal state, only triggers renders on start/stop) ============
@@ -59,9 +80,6 @@ export function getStreamingContent(): string {
 interface StreamingStore {
   // State - only metadata, content is in refs
   meta: StreamingMeta | null;
-  
-  // Version counter - incremented on each content update for useSyncExternalStore compatibility
-  contentVersion: number;
   
   // Actions
   start: (parentId: string, speakerId: string, nodeClientId: string) => void;
@@ -82,11 +100,12 @@ interface StreamingStore {
  */
 export const useStreamingStore = create<StreamingStore>((set, get) => ({
   meta: null,
-  contentVersion: 0,
 
   start: (parentId, speakerId, nodeClientId) => {
+    cancelPendingFlush();
     // Reset content buffer
     contentBuffer = '';
+    pendingChunks = [];
     
     // Set metadata (triggers re-render for components watching meta)
     set({
@@ -96,32 +115,49 @@ export const useStreamingStore = create<StreamingStore>((set, get) => ({
         startedAt: Date.now(),
         nodeClientId,
       },
-      contentVersion: 0,
     });
   },
 
   append: (chunk) => {
     if (!get().meta) return;
     
-    // Update buffer (no re-render)
-    contentBuffer += chunk;
-
+    // Buffer chunks; we only join once per flush.
+    pendingChunks.push(chunk);
     // Coalesce parse + notify to once per frame.
     if (flushScheduled) return;
     flushScheduled = true;
 
-    const schedule =
-      typeof requestAnimationFrame === 'function'
-        ? requestAnimationFrame
-        : (cb: FrameRequestCallback) => setTimeout(() => cb(Date.now()), 16) as unknown as number;
+    if (typeof requestAnimationFrame === 'function') {
+      flushHandleKind = 'raf';
+      flushHandle = requestAnimationFrame(() => {
+        flushHandle = null;
+        flushHandleKind = null;
+        flushScheduled = false;
+        // If streaming stopped before the flush runs, skip notifying.
+        if (!get().meta) return;
+        if (pendingChunks.length > 0) {
+          contentBuffer += pendingChunks.join('');
+          pendingChunks = [];
+        }
+        notifyContentListeners();
+      });
+      return;
+    }
 
-    schedule(() => {
+    flushHandleKind = 'timeout';
+    flushHandle = setTimeout(() => {
+      flushHandle = null;
+      flushHandleKind = null;
       flushScheduled = false;
-      // Increment version for external store compatibility
-      set(state => ({ contentVersion: state.contentVersion + 1 }));
+      // If streaming stopped before the flush runs, skip notifying.
+      if (!get().meta) return;
+      if (pendingChunks.length > 0) {
+        contentBuffer += pendingChunks.join('');
+        pendingChunks = [];
+      }
       // Notify DOM listeners (ref-based updates)
       notifyContentListeners();
-    });
+    }, 16) as unknown as number;
   },
 
   setContent: (content) => {
@@ -129,10 +165,10 @@ export const useStreamingStore = create<StreamingStore>((set, get) => ({
     
     // Reset buffer with new content
     contentBuffer = content;
+    pendingChunks = [];
 
     // Immediate flush for full content replacement.
-    flushScheduled = false;
-    set(state => ({ contentVersion: state.contentVersion + 1 }));
+    cancelPendingFlush();
     notifyContentListeners();
   },
 
@@ -143,19 +179,23 @@ export const useStreamingStore = create<StreamingStore>((set, get) => ({
     // Capture full message
     const message: StreamingMessage = {
       ...meta,
-      content: contentBuffer,
+      content: getStreamingContent(),
     };
     
     // Clear state
+    cancelPendingFlush();
     contentBuffer = '';
-    set({ meta: null, contentVersion: 0 });
+    pendingChunks = [];
+    set({ meta: null });
     
     return message;
   },
 
   cancel: () => {
+    cancelPendingFlush();
     contentBuffer = '';
-    set({ meta: null, contentVersion: 0 });
+    pendingChunks = [];
+    set({ meta: null });
   },
 }));
 

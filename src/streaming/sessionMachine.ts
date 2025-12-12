@@ -191,13 +191,22 @@ export function createStreamingSessionMachine(deps: StreamingSessionDeps): Strea
       // Treat as cancel-like cleanup: stop streaming UI and delete placeholder.
       cancelStoreIfActive(s.nodeClientId);
 
-      const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
-      if (node) {
-        void deps.deleteMessage(node.id).catch(() => {});
-      }
+      // Delete exactly once:
+      // - If we can find the node now, delete it now.
+      // - Otherwise, delete after creation resolves.
+      const deletedIds = new Set<string>();
+      const deleteOnce = (id: string) => {
+        if (deletedIds.has(id)) return;
+        deletedIds.add(id);
+        void deps.deleteMessage(id).catch(() => {});
+      };
 
-      // Important: delete the server-created node once creation completes, regardless of future starts.
-      void s.createPromise.then((r) => deps.deleteMessage(r.id)).catch(() => {});
+      const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
+      if (node) deleteOnce(node.id);
+
+      // Important: always clean up the server-created row once it lands,
+      // even if a new streaming session starts later.
+      void s.createPromise.then((r) => deleteOnce(r.id)).catch(() => {});
 
       if (isSameSession(sid)) state = { status: 'idle' };
       return false;
@@ -241,22 +250,20 @@ export function createStreamingSessionMachine(deps: StreamingSessionDeps): Strea
     // Stop streaming immediately (UI) for this session’s node.
     cancelStoreIfActive(s.nodeClientId);
 
-    // Remove the placeholder node from the chat tree.
-    const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
-    if (node) {
-      void deps.deleteMessage(node.id).catch(() => {});
-    }
+    // Delete exactly once (same logic as empty-finalize).
+    const deletedIds = new Set<string>();
+    const deleteOnce = (id: string) => {
+      if (deletedIds.has(id)) return;
+      deletedIds.add(id);
+      void deps.deleteMessage(id).catch(() => {});
+    };
 
-    // If the server creation is still in flight, clean it up once it lands
-    // even if a new session starts later (otherwise we orphan empty rows).
-    void s.createPromise
-      .then((r) => {
-        // Only perform server cleanup if this cancelled session is still the one we cancelled.
-        // We intentionally do NOT use any "global cancelled id" gate here; each session carries
-        // its own createPromise/id, so deleting it cannot affect newer sessions.
-        return deps.deleteMessage(r.id).then(() => {});
-      })
-      .catch(() => {});
+    const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
+    if (node) deleteOnce(node.id);
+
+    // Important: always clean up the server-created row once it lands,
+    // even if a new streaming session starts later.
+    void s.createPromise.then((r) => deleteOnce(r.id)).catch(() => {});
 
     if (isSameSession(sid)) state = { status: 'idle' };
   };
