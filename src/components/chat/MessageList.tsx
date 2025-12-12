@@ -388,11 +388,18 @@ export function MessageList() {
       marginRight: 'auto',
     };
 
-    const dividerForGap = (gapPx: string): CSSProperties => ({
-      ...baseDivider,
-      marginTop: `calc(${gapPx} / 2)`,
-      marginBottom: `calc(${gapPx} / 2)`,
-    });
+    // NOTE: `.message-divider` is 1px tall (see `src/components/chat/chat.css`).
+    // We want: marginTop + dividerHeight + marginBottom === configured gap.
+    const dividerForGap = (gapPx: string): CSSProperties => {
+      const dividerHeightPx = '1px';
+      // Clamp at 0 to avoid negative margins when gap < divider height.
+      const margin = `max(0px, calc((${gapPx} - ${dividerHeightPx}) / 2))`;
+      return {
+        ...baseDivider,
+        marginTop: margin,
+        marginBottom: margin,
+      };
+    };
 
     const spacer: CSSProperties = {
       height: messageGapPx,
