@@ -191,22 +191,15 @@ export function createStreamingSessionMachine(deps: StreamingSessionDeps): Strea
       // Treat as cancel-like cleanup: stop streaming UI and delete placeholder.
       cancelStoreIfActive(s.nodeClientId);
 
-      // Delete exactly once:
-      // - If we can find the node now, delete it now.
-      // - Otherwise, delete after creation resolves.
-      const deletedIds = new Set<string>();
-      const deleteOnce = (id: string) => {
-        if (deletedIds.has(id)) return;
-        deletedIds.add(id);
-        void deps.deleteMessage(id).catch(() => {});
-      };
-
       const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
-      if (node) deleteOnce(node.id);
+      if (node) {
+        // Best-effort immediate cleanup (optimistic removal). This can race the create and 404.
+        void deps.deleteMessage(node.id).catch(() => {});
+      }
 
       // Important: always clean up the server-created row once it lands,
       // even if a new streaming session starts later.
-      void s.createPromise.then((r) => deleteOnce(r.id)).catch(() => {});
+      void s.createPromise.then((r) => deps.deleteMessage(r.id)).catch(() => {});
 
       if (isSameSession(sid)) state = { status: 'idle' };
       return false;
@@ -250,20 +243,15 @@ export function createStreamingSessionMachine(deps: StreamingSessionDeps): Strea
     // Stop streaming immediately (UI) for this session’s node.
     cancelStoreIfActive(s.nodeClientId);
 
-    // Delete exactly once (same logic as empty-finalize).
-    const deletedIds = new Set<string>();
-    const deleteOnce = (id: string) => {
-      if (deletedIds.has(id)) return;
-      deletedIds.add(id);
-      void deps.deleteMessage(id).catch(() => {});
-    };
-
     const node = findNodeByClientId(deps.getNodes(), s.nodeClientId);
-    if (node) deleteOnce(node.id);
+    if (node) {
+      // Best-effort immediate cleanup (optimistic removal). This can race the create and 404.
+      void deps.deleteMessage(node.id).catch(() => {});
+    }
 
     // Important: always clean up the server-created row once it lands,
     // even if a new streaming session starts later.
-    void s.createPromise.then((r) => deleteOnce(r.id)).catch(() => {});
+    void s.createPromise.then((r) => deps.deleteMessage(r.id)).catch(() => {});
 
     if (isSameSession(sid)) state = { status: 'idle' };
   };
