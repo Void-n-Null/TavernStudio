@@ -94,7 +94,12 @@ export function useAddMessage(chatId: string) {
       speakerId: string;
       isBot: boolean;
       createdAt?: number;
-    }) => chats.addMessage(chatId, params.parentId, params.content, params.speakerId, params.isBot, params.createdAt),
+      /**
+       * Optional client-chosen message id (UUID). If provided, server will use it.
+       * This avoids temp->real id replacement churn.
+       */
+      id?: string;
+    }) => chats.addMessage(chatId, params.parentId, params.content, params.speakerId, params.isBot, params.createdAt, params.id),
     
     onMutate: async (params) => {
       // Cancel outgoing refetches
@@ -104,13 +109,14 @@ export function useAddMessage(chatId: string) {
       const previous = queryClient.getQueryData<ChatFull>(queryKeys.chats.detail(chatId));
       
       // Optimistically add the message with a temporary ID
-      const tempId = `__temp_${crypto.randomUUID()}`;
+      const tempId = params.id ?? `__temp_${crypto.randomUUID()}`;
       
       if (previous) {
         const createdAt = params.createdAt ?? Date.now();
         
         const newNode: ChatNode = {
           id: tempId,
+          client_id: tempId,
           parent_id: params.parentId,
           child_ids: [],
           active_child_index: null,
@@ -143,31 +149,45 @@ export function useAddMessage(chatId: string) {
     },
     
     onSuccess: (response, params, context) => {
-      // Replace temp node with real node from server
-      const current = queryClient.getQueryData<ChatFull>(queryKeys.chats.detail(chatId));
-      if (current && context?.tempId) {
-        const realId = response.id;
-        const realCreatedAt = response.created_at;
-        
-        queryClient.setQueryData<ChatFull>(queryKeys.chats.detail(chatId), {
+      const realId = response.id;
+      const realCreatedAt = response.created_at;
+      const tempId = context?.tempId;
+      if (!tempId) return;
+
+      queryClient.setQueryData<ChatFull>(queryKeys.chats.detail(chatId), (current) => {
+        if (!current) return current as any;
+
+        // If server respected the provided ID, we can keep the ID stable and only
+        // update created_at for accuracy.
+        if (realId === tempId) {
+          return {
+            ...current,
+            nodes: current.nodes.map((node) =>
+              node.id === realId
+                ? { ...node, created_at: realCreatedAt, client_id: node.client_id ?? tempId }
+                : node
+            ),
+          };
+        }
+
+        // Otherwise, replace temp node id with the real id from server.
+        return {
           ...current,
           nodes: current.nodes.map(node => {
-            // Replace temp node with real ID
-            if (node.id === context.tempId) {
-              return { ...node, id: realId, created_at: realCreatedAt };
+            if (node.id === tempId) {
+              return { ...node, id: realId, created_at: realCreatedAt, client_id: node.client_id ?? tempId };
             }
-            // Update parent's child_ids to use real ID
             if (node.id === params.parentId) {
               return {
                 ...node,
-                child_ids: node.child_ids.map(cid => cid === context.tempId ? realId : cid),
+                child_ids: node.child_ids.map(cid => cid === tempId ? realId : cid),
               };
             }
             return node;
           }),
-          tailId: current.tailId === context.tempId ? realId : current.tailId,
-        });
-      }
+          tailId: current.tailId === tempId ? realId : current.tailId,
+        };
+      });
     },
     
     onError: (_, __, context) => {
@@ -220,7 +240,14 @@ export function useDeleteMessage(chatId: string) {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (nodeId: string) => chats.deleteMessage(chatId, nodeId),
+    mutationFn: (nodeId: string) => {
+      // Temp ids are client-only; they may never have existed on the server.
+      // Treat as a no-op success so our optimistic removal "sticks".
+      if (nodeId.startsWith('__temp_')) {
+        return Promise.resolve({ success: true });
+      }
+      return chats.deleteMessage(chatId, nodeId);
+    },
     
     onMutate: async (nodeId) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.chats.detail(chatId) });
@@ -438,8 +465,15 @@ export function useServerChat() {
     activePath,
     
     // Bound mutations
-    addMessage: (parentId: string | null, content: string, speakerId: string, isBot: boolean, createdAt?: number) =>
-      addMessageMutation.mutateAsync({ parentId, content, speakerId, isBot, createdAt }),
+    addMessage: (
+      parentId: string | null,
+      content: string,
+      speakerId: string,
+      isBot: boolean,
+      createdAt?: number,
+      id?: string
+    ) =>
+      addMessageMutation.mutateAsync({ parentId, content, speakerId, isBot, createdAt, id: id ?? crypto.randomUUID() }),
     
     editMessage: (nodeId: string, content: string) =>
       editMessageMutation.mutateAsync({ nodeId, content }),
@@ -456,4 +490,158 @@ export function useServerChat() {
     isDeletingMessage: deleteMessageMutation.isPending,
     isSwitchingBranch: switchBranchMutation.isPending,
   };
+}
+
+/**
+ * Lightweight server-chat status hook for top-level shells (like `App`).
+ *
+ * Purpose: avoid re-rendering the entire app tree on every chat `data` update.
+ * We intentionally do **not** read `chatQuery.data` here.
+ */
+export function useServerChatStatus(): { isLoading: boolean; error: Error | null } {
+  const { data: defaultChatData, isLoading: isLoadingId, error: defaultChatError } = useDefaultChatId();
+  const chatId = defaultChatData?.id;
+
+  // Important: only read `isLoading`/`error` so we don't subscribe to `data`.
+  const chatQuery = useChat(chatId);
+
+  return {
+    isLoading: isLoadingId || chatQuery.isLoading,
+    error: (defaultChatError ?? chatQuery.error) ?? null,
+  };
+}
+
+// ============ Performance-focused selectors (avoid whole-list re-renders) ============
+
+const EMPTY_NODE_IDS: string[] = [];
+function sameStringArray(a: unknown, b: unknown): boolean {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function sameChatNode(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const aa = a as ChatNode;
+  const bb = b as ChatNode;
+  if (!aa.id || !bb.id) return false;
+  if (aa.id !== bb.id) return false;
+  if (aa.client_id !== bb.client_id) return false;
+  if (aa.parent_id !== bb.parent_id) return false;
+  if (aa.active_child_index !== bb.active_child_index) return false;
+  if (aa.speaker_id !== bb.speaker_id) return false;
+  if (aa.message !== bb.message) return false;
+  if (aa.is_bot !== bb.is_bot) return false;
+  if (aa.created_at !== bb.created_at) return false;
+  if (aa.updated_at !== bb.updated_at) return false;
+  if (!Array.isArray(aa.child_ids) || !Array.isArray(bb.child_ids)) return false;
+  if (aa.child_ids.length !== bb.child_ids.length) return false;
+  for (let i = 0; i < aa.child_ids.length; i++) {
+    if (aa.child_ids[i] !== bb.child_ids[i]) return false;
+  }
+  return true;
+}
+
+function sameSpeaker(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const aa = a as Speaker;
+  const bb = b as Speaker;
+  if (!aa.id || !bb.id) return false;
+  return (
+    aa.id === bb.id &&
+    aa.name === bb.name &&
+    aa.avatar_url === bb.avatar_url &&
+    aa.color === bb.color &&
+    aa.is_user === bb.is_user
+  );
+}
+
+/**
+ * Returns the active path node IDs only.
+ *
+ * Important: This selector is intentionally derived only from structural fields
+ * (`rootId`, `child_ids`, `active_child_index`) so message content edits do not
+ * change the result. This lets components like MessageList avoid re-rendering
+ * on finalize/edit operations that only change `message`/`updated_at`.
+ */
+export function useChatActivePathNodeIds(): string[] {
+  const { data: defaultChatData } = useDefaultChatId();
+  const chatId = defaultChatData?.id;
+
+  const { data } = useQuery({
+    queryKey: queryKeys.chats.detail(chatId ?? ''),
+    queryFn: () => chats.get(chatId!),
+    enabled: !!chatId,
+    // Avoid re-rendering consumers on dataUpdatedAt/isStale churn.
+    notifyOnChangeProps: ['data'],
+    select: (chat): string[] => {
+      const rootId = chat.rootId;
+      if (!rootId) return [];
+
+      const byId = new Map(chat.nodes.map((n) => [n.id, n]));
+      const ids: string[] = [];
+
+      let currentId: string | null = rootId;
+      while (currentId) {
+        const node = byId.get(currentId);
+        if (!node) break;
+        ids.push(currentId);
+
+        const idx = node.active_child_index;
+        if (node.child_ids.length > 0 && idx !== null && idx >= 0 && idx < node.child_ids.length) {
+          currentId = node.child_ids[idx];
+        } else {
+          currentId = null;
+        }
+      }
+
+      return ids;
+    },
+    // Ensure stable array identity when the path doesn't actually change.
+    structuralSharing: (oldData, newData) => (sameStringArray(oldData, newData) ? oldData : newData),
+  });
+
+  return data ?? EMPTY_NODE_IDS;
+}
+
+/** Select a single node by id from the cached chat. */
+export function useChatNode(nodeId: string | null | undefined): ChatNode | null {
+  const { data: defaultChatData } = useDefaultChatId();
+  const chatId = defaultChatData?.id;
+
+  const { data } = useQuery({
+    queryKey: queryKeys.chats.detail(chatId ?? ''),
+    queryFn: () => chats.get(chatId!),
+    enabled: !!chatId && !!nodeId,
+    // Avoid re-rendering consumers on dataUpdatedAt/isStale churn.
+    notifyOnChangeProps: ['data'],
+    select: (chat) => chat.nodes.find((n) => n.id === nodeId) ?? null,
+    // Keep the same object identity if nothing meaningful changed.
+    structuralSharing: (oldData, newData) => (sameChatNode(oldData, newData) ? oldData : newData),
+  });
+
+  return data ?? null;
+}
+
+/** Select a single speaker by id from the cached chat. */
+export function useChatSpeaker(speakerId: string | null | undefined): Speaker | null {
+  const { data: defaultChatData } = useDefaultChatId();
+  const chatId = defaultChatData?.id;
+
+  const { data } = useQuery({
+    queryKey: queryKeys.chats.detail(chatId ?? ''),
+    queryFn: () => chats.get(chatId!),
+    enabled: !!chatId && !!speakerId,
+    // Avoid re-rendering consumers on dataUpdatedAt/isStale churn.
+    notifyOnChangeProps: ['data'],
+    select: (chat) => chat.speakers.find((s) => s.id === speakerId) ?? null,
+    structuralSharing: (oldData, newData) => (sameSpeaker(oldData, newData) ? oldData : newData),
+  });
+
+  return data ?? null;
 }

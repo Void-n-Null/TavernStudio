@@ -227,6 +227,7 @@ chatRoutes.delete('/:id', (c) => {
 chatRoutes.post('/:id/messages', async (c) => {
   const chatId = c.req.param('id');
   const body = await c.req.json<{
+    id?: string;
     parentId: string | null;
     content: string;
     speakerId: string;
@@ -234,7 +235,25 @@ chatRoutes.post('/:id/messages', async (c) => {
     createdAt?: number;
   }>();
   
-  const id = crypto.randomUUID();
+  // Allow client-provided IDs for frontend-authoritative creation.
+  // This avoids temp->real ID replacement churn on the client.
+  let id: string;
+  if (typeof body.id === 'string' && body.id.length > 0) {
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(body.id)) {
+      return c.json({ error: 'Invalid message id (must be UUID)' }, 400);
+    }
+
+    // Ensure global uniqueness (chat_nodes.id is PRIMARY KEY).
+    const existing = prepare<{ id: string }>('SELECT id FROM chat_nodes WHERE id = ?').get(body.id) as { id: string } | null;
+    if (existing) {
+      return c.json({ error: 'Message id already exists' }, 409);
+    }
+
+    id = body.id;
+  } else {
+    id = crypto.randomUUID();
+  }
   // Use provided timestamp (e.g., from streaming start) or current time
   const now = body.createdAt ?? Date.now();
   

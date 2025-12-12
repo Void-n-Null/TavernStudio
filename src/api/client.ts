@@ -129,11 +129,12 @@ export const chats = {
     content: string,
     speakerId: string,
     isBot: boolean,
-    createdAt?: number
+    createdAt?: number,
+    id?: string
   ) =>
     api<{ id: string; created_at: number }>(`/chats/${chatId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ parentId, content, speakerId, isBot, createdAt }),
+      body: JSON.stringify({ id, parentId, content, speakerId, isBot, createdAt }),
     }),
 
   editMessage: (chatId: string, nodeId: string, content: string) =>

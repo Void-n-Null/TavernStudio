@@ -2,6 +2,11 @@
 
 export interface ChatNode {
   id: string;
+  /**
+   * Client-stable identifier used to keep React keys stable across
+   * optimistic temp id -> real id replacement.
+   */
+  client_id?: string;
   parent_id: string | null;
   child_ids: string[];
   active_child_index: number | null; // Blake's index-based switching

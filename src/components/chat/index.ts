@@ -5,4 +5,3 @@ export { MessageContent } from './MessageContent';
 export { MessageMeta } from './MessageMeta';
 export { MessageActions } from './MessageActions';
 export { MessageBranchIndicator } from './MessageBranchIndicator';
-export { EtherealMessage } from './EtherealMessage';

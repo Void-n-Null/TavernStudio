@@ -2,19 +2,24 @@ import { create } from 'zustand';
 import { createStreamingParser, type StreamingParser } from '../utils/streamingMarkdown';
 
 /**
- * Ethereal streaming message metadata.
+ * Streaming message metadata.
  * Content is stored separately in refs to avoid re-renders on every chunk.
  */
-export interface EtherealMeta {
+export interface StreamingMeta {
   parentId: string;
   speakerId: string;
   startedAt: number;
+  /**
+   * Client-stable id for the message node (used to match optimistic temp -> real id).
+   * This is stored on the ChatNode as `client_id`.
+   */
+  nodeClientId: string;
 }
 
 /**
- * Full ethereal message (for finalization/persistence).
+ * Full streaming message snapshot (for finalization/persistence).
  */
-export interface EtherealMessage extends EtherealMeta {
+export interface StreamingMessage extends StreamingMeta {
   content: string;
 }
 
@@ -63,16 +68,16 @@ export function getStreamingHtml(): string {
 
 interface StreamingStore {
   // State - only metadata, content is in refs
-  meta: EtherealMeta | null;
+  meta: StreamingMeta | null;
   
   // Version counter - incremented on each content update for useSyncExternalStore compatibility
   contentVersion: number;
   
   // Actions
-  start: (parentId: string, speakerId: string) => void;
+  start: (parentId: string, speakerId: string, nodeClientId: string) => void;
   append: (chunk: string) => void;
   setContent: (content: string) => void;
-  finalize: () => EtherealMessage | null;
+  finalize: () => StreamingMessage | null;
   cancel: () => void;
 }
 
@@ -89,7 +94,7 @@ export const useStreamingStore = create<StreamingStore>((set, get) => ({
   meta: null,
   contentVersion: 0,
 
-  start: (parentId, speakerId) => {
+  start: (parentId, speakerId, nodeClientId) => {
     // Reset content buffer and parser
     contentBuffer = '';
     parser = createStreamingParser();
@@ -100,6 +105,7 @@ export const useStreamingStore = create<StreamingStore>((set, get) => ({
         parentId,
         speakerId,
         startedAt: Date.now(),
+        nodeClientId,
       },
       contentVersion: 0,
     });
@@ -152,7 +158,7 @@ export const useStreamingStore = create<StreamingStore>((set, get) => ({
     parser?.finalize();
     
     // Capture full message
-    const message: EtherealMessage = {
+    const message: StreamingMessage = {
       ...meta,
       content: contentBuffer,
     };
@@ -183,28 +189,37 @@ export function useIsStreaming(): boolean {
 }
 
 /**
- * Get ethereal metadata if streaming.
+ * Get streaming metadata if streaming.
  * Re-renders only when streaming starts/stops.
  */
-export function useEtherealMeta(): EtherealMeta | null {
+export function useStreamingMeta(): StreamingMeta | null {
   return useStreamingStore((state) => state.meta);
 }
 
 /**
- * Get the full ethereal message (meta + current content) if streaming.
+ * Subscribe to whether a given message node (by `client_id`) is currently streaming.
+ *
+ * Key perf property: most messages will keep returning `false` even when streaming starts/stops,
+ * so they will NOT re-render on streaming meta churn.
+ */
+export function useIsStreamingNode(nodeClientId: string | null | undefined): boolean {
+  return useStreamingStore((state) => {
+    if (!nodeClientId) return false;
+    return state.meta?.nodeClientId === nodeClientId;
+  });
+}
+
+/**
+ * Get the full streaming message snapshot (meta + current content) if streaming.
  * NOTE: This reads content from the ref, so it won't trigger re-renders on content change.
  * Use subscribeToContent() for real-time DOM updates.
  */
-export function useEtherealMessage(): EtherealMessage | null {
+export function useStreamingMessage(): StreamingMessage | null {
   const meta = useStreamingStore((state) => state.meta);
   if (!meta) return null;
   return { ...meta, content: contentBuffer };
 }
 
-/**
- * Check if we're streaming as a child of a specific parent.
- * Useful for knowing where to render the ethereal message.
- */
-export function useIsStreamingAfter(parentId: string): boolean {
-  return useStreamingStore((state) => state.meta?.parentId === parentId);
-}
+// Back-compat aliases (to be removed once ethereal is fully removed)
+export const useEtherealMeta = useStreamingMeta;
+export const useEtherealMessage = useStreamingMessage;

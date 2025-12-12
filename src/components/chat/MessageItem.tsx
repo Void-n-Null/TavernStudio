@@ -7,6 +7,7 @@ import { MessageBranchIndicator } from './MessageBranchIndicator';
 import { MessageActions } from './MessageActions';
 import { useLayoutConfig, useEditConfig } from '../../hooks/queries/useProfiles';
 import { gapMap, paddingMap } from '../../types/messageStyle';
+import { useIsStreamingNode } from '../../store/streamingStore';
 
 interface MessageItemProps {
   node: ChatNode;
@@ -74,6 +75,7 @@ export const MessageItem = memo(function MessageItem({
 }: MessageItemProps) {
   const layout = useLayoutConfig();
   const editConfig = useEditConfig();
+  const isStreamingThis = useIsStreamingNode(node.client_id);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(node.message);
@@ -236,6 +238,7 @@ export const MessageItem = memo(function MessageItem({
           nodeId={node.id}
           content={isEditing ? editContent : node.message}
           isBot={node.is_bot}
+          isStreaming={isStreamingThis}
           isEditing={isEditing}
           onEditChange={setEditContent}
         />
