@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.56",
     "@ai-sdk/openai": "^2.0.85",
     "@dqbd/tiktoken": "^1.0.22",
     "@openrouter/ai-sdk-provider": "^1.5.3",
@@ -34,6 +35,7 @@
     "streamdown": "^1.6.10",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.1.13",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

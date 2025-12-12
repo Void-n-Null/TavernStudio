@@ -48,4 +48,10 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.profiles.all, 'detail', id] as const,
     active: () => [...queryKeys.profiles.all, 'active'] as const,
   },
+
+  // AI providers (server-side schemas + connection status)
+  aiProviders: {
+    all: ['aiProviders'] as const,
+    list: () => [...queryKeys.aiProviders.all, 'list'] as const,
+  },
 };

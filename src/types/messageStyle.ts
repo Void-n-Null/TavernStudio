@@ -78,6 +78,14 @@ export interface HeaderConfig {
   borderOpacity: number;         // 0-100
   borderWidthPx: number;
 
+  shadowEnabled: boolean;
+  shadowColor: string;           // Supports hex/rgb(a)
+  shadowOpacity: number;         // 0-100
+  shadowOffsetXPx: number;
+  shadowOffsetYPx: number;
+  shadowBlurPx: number;
+  shadowSpreadPx: number;
+
   roundedBottom: boolean;
   radiusPx: number;
 

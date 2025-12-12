@@ -50,12 +50,21 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
   const toolbarStyle: React.CSSProperties = useMemo(() => ({
     width: isMobile || header.widthMode === 'full' ? '100%' : `${layout.containerWidth}%`,
     margin: isMobile || header.widthMode === 'full' ? undefined : '0 auto',
+    // Ensure header (and its box-shadow) paints above the message list below.
+    // Without this, the next sibling's background can visually "cover" the shadow area.
+    position: 'relative',
+    zIndex: 20,
   }), [header.widthMode, isMobile, layout.containerWidth]);
 
   const innerStyle: React.CSSProperties = useMemo(() => {
     // Side borders only show when: border toggle is ON, rounded mode is ON, and chat-width mode (not full-width)
     const showEdgeBorders = header.borderBottom && header.roundedBottom && header.widthMode === 'match-chat' && !isMobile;
     const borderColor = withOpacity(header.borderColor, header.borderOpacity);
+    const shadowColor = withOpacity(header.shadowColor, header.shadowOpacity);
+    const boxShadow =
+      header.shadowEnabled
+        ? `${header.shadowOffsetXPx}px ${header.shadowOffsetYPx}px ${header.shadowBlurPx}px ${header.shadowSpreadPx}px ${shadowColor}`
+        : 'none';
 
     return {
       height: header.heightPx,
@@ -75,6 +84,7 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
       borderRightStyle: showEdgeBorders ? 'solid' : 'none',
       borderRightWidth: showEdgeBorders ? header.borderWidthPx : 0,
       borderRightColor: showEdgeBorders ? borderColor : undefined,
+      boxShadow,
     };
   }, [
     header.backgroundColor,
@@ -88,6 +98,13 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
     header.paddingX,
     header.radiusPx,
     header.roundedBottom,
+    header.shadowBlurPx,
+    header.shadowColor,
+    header.shadowEnabled,
+    header.shadowOffsetXPx,
+    header.shadowOffsetYPx,
+    header.shadowOpacity,
+    header.shadowSpreadPx,
     header.widthMode,
     isMobile,
   ]);

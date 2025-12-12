@@ -9,6 +9,7 @@ import { profileRoutes, seedDefaultProfileIfEmpty } from './routes/profiles';
 import designTemplateRoutes from './routes/designTemplates';
 import { fontRoutes } from './routes/fonts';
 import { seedDemoDataIfEmpty } from './seed';
+import { aiProviderRoutes } from './routes/aiProviders';
 
 const app = new Hono();
 
@@ -40,6 +41,7 @@ app.route('/api/speakers', speakerRoutes);
 app.route('/api/profiles', profileRoutes);
 app.route('/api/design-templates', designTemplateRoutes);
 app.route('/api/fonts', fontRoutes);
+app.route('/api/ai/providers', aiProviderRoutes);
 
 // Initialize database and start server
 const port = Number(process.env.PORT) || 3001;

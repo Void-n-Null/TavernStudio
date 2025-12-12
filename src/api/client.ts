@@ -244,6 +244,66 @@ export const health = {
   check: () => api<{ status: string; timestamp: number }>('/health'),
 };
 
+// ============ AI Providers (DEV/admin) ============
+
+export type AiProviderAuthStrategyStatus = {
+  id: string;
+  type: string;
+  label: string;
+  configured: boolean;
+  presentKeys: string[];
+  requiredKeys: string[];
+};
+
+export type AiProviderStatus = {
+  id: string;
+  label: string;
+  config: unknown | null;
+  configValid: boolean;
+  authStrategies: AiProviderAuthStrategyStatus[];
+  connection?: {
+    provider_id: string;
+    auth_strategy_id: string | null;
+    status: string;
+    last_validated_at: number | null;
+    last_error: string | null;
+    updated_at: number;
+  };
+};
+
+export const aiProviders = {
+  list: () => api<{ providers: AiProviderStatus[] }>('/ai/providers'),
+
+  setConfig: (providerId: string, config: unknown) =>
+    api<{ success: boolean }>(`/ai/providers/${providerId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    }),
+
+  setSecrets: (providerId: string, authStrategyId: string, secrets: Record<string, string>) =>
+    api<{ success: boolean }>(`/ai/providers/${providerId}/secrets/${authStrategyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(secrets),
+    }),
+
+  connect: (providerId: string, authStrategyId: string) =>
+    api<{ success: boolean }>(`/ai/providers/${providerId}/connect`, {
+      method: 'POST',
+      body: JSON.stringify({ authStrategyId }),
+    }),
+
+  disconnect: (providerId: string) =>
+    api<{ success: boolean }>(`/ai/providers/${providerId}/disconnect`, {
+      method: 'POST',
+    }),
+
+  startOpenRouterPkce: (returnUrl: string) =>
+    api<{ authUrl: string; state: string }>(`/ai/providers/openrouter/pkce/start`, {
+      method: 'POST',
+      body: JSON.stringify({ returnUrl }),
+    }),
+};
+
 // ============ Default Chat ============
 
 export const defaultChat = {

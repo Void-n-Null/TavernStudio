@@ -337,7 +337,7 @@ export function MessageList() {
     
     const opacity = messageListBg.opacity / 100;
     const baseStyle: CSSProperties = {
-      borderRadius: '8px',
+      borderRadius: '0px',
     };
     
     // Add backdrop blur if set

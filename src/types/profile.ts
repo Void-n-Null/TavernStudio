@@ -5,10 +5,25 @@
 
 import type { MessageStyleConfig } from './messageStyle';
 
+export interface AiConfig {
+  id: string;
+  name: string;
+  providerId: string;
+  authStrategyId: string;
+  modelId: string;
+  params: Record<string, unknown>;
+  providerConfig: Record<string, unknown>;
+  isDefault: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Profile {
   id: string;
   name: string;
   messageStyle: MessageStyleConfig;
+  aiConfigs: AiConfig[];
+  activeAiConfigId: string;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
@@ -32,4 +47,5 @@ export interface CreateProfileRequest {
 export interface UpdateProfileRequest {
   name?: string;
   messageStyle?: MessageStyleConfig;
+  activeAiConfigId?: string;
 }

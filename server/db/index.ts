@@ -85,6 +85,30 @@ export function initDb(): Database {
       updated_at INTEGER NOT NULL
     )
   `);
+
+  // Profiles can have multiple AI configs; one is "active".
+  // Existing DBs won’t have this column; add it safely.
+  try {
+    db.run('ALTER TABLE profiles ADD COLUMN active_ai_config_id TEXT');
+  } catch {}
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS profile_ai_configs (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      auth_strategy_id TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      params_json TEXT NOT NULL DEFAULT '{}',
+      provider_config_json TEXT NOT NULL DEFAULT '{}',
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  db.run('CREATE INDEX IF NOT EXISTS idx_profile_ai_configs_profile ON profile_ai_configs(profile_id)');
   
   db.run(`
     CREATE TABLE IF NOT EXISTS design_templates (
@@ -104,6 +128,55 @@ export function initDb(): Database {
       filename TEXT NOT NULL,
       format TEXT NOT NULL,
       created_at INTEGER NOT NULL
+    )
+  `);
+
+  // ============ AI Provider Config / Secrets ============
+  // Non-secret provider config (safe to return to UI).
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_provider_configs (
+      provider_id TEXT PRIMARY KEY,
+      config_json TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  // Encrypted provider secrets (never returned to UI).
+  // Composite primary key allows multiple secrets per provider/strategy.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_provider_secrets (
+      provider_id TEXT NOT NULL,
+      auth_strategy_id TEXT NOT NULL,
+      secret_key TEXT NOT NULL,
+      encrypted_value TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (provider_id, auth_strategy_id, secret_key)
+    )
+  `);
+
+  // Connection state (validated credentials, chosen auth strategy, last error).
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_provider_connections (
+      provider_id TEXT PRIMARY KEY,
+      auth_strategy_id TEXT,
+      status TEXT NOT NULL, /* disconnected | connected | error_auth | error_other */
+      last_validated_at INTEGER,
+      last_error TEXT,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  // PKCE sessions (short-lived). Used to store code_verifier server-side.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_pkce_sessions (
+      state TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL,
+      auth_strategy_id TEXT NOT NULL,
+      code_verifier TEXT NOT NULL,
+      return_url TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
     )
   `);
   
