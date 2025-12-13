@@ -6,8 +6,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Hash, MessageSquare } from 'lucide-react';
 import { Card, MetricRow } from './DetailBlocks';
-import { countOpenAiTokens, type OpenAIEncodingName } from '../../../utils/tiktoken';
+import type { OpenAIEncodingName } from '../../../utils/tiktoken';
 import { parseExampleMessages } from '../../../utils/exampleMessages';
+import { countOpenAiTokensManyOffThread } from '../../../utils/tiktokenWorkerClient';
 
 export type DetailInsightInput = {
   name: string;
@@ -79,16 +80,20 @@ export function CharacterDetailInsights({
 
     const run = async () => {
       try {
-        const stats: TokenStats = {
-          description: await countOpenAiTokens(input.description, encoding),
-          personality: await countOpenAiTokens(input.personality, encoding),
-          scenario: await countOpenAiTokens(input.scenario, encoding),
-          greetings: await countOpenAiTokens(allGreetings.join('\n\n'), encoding),
-          examples: await countOpenAiTokens(input.exampleMessages, encoding),
-          system: await countOpenAiTokens(input.systemPrompt, encoding),
-          postHistory: await countOpenAiTokens(input.postHistoryInstructions, encoding),
-          creatorNotes: await countOpenAiTokens(input.creatorNotes, encoding),
-        };
+        const counts = await countOpenAiTokensManyOffThread(
+          {
+            description: input.description,
+            personality: input.personality,
+            scenario: input.scenario,
+            greetings: allGreetings.join('\n\n'),
+            examples: input.exampleMessages,
+            system: input.systemPrompt,
+            postHistory: input.postHistoryInstructions,
+            creatorNotes: input.creatorNotes,
+          },
+          encoding
+        );
+        const stats: TokenStats = counts;
         if (cancelled) return;
         setTokenStats(stats);
         const total = Object.values(stats).reduce((a, b) => a + b, 0);

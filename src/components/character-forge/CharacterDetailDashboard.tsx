@@ -81,6 +81,8 @@ export function CharacterDetailDashboard({
   onExportJson: () => void;
   onExportPng: () => void;
 }) {
+  const HUGE_TEXT_CHARS = 50_000;
+  const RAW_JSON_PREVIEW_CHARS = 4_000;
   const [imgError, setImgError] = useState(false);
   const [greetingIndex, setGreetingIndex] = useState(0);
   const [totalTokens, setTotalTokens] = useState<number | null>(null);
@@ -92,10 +94,11 @@ export function CharacterDetailDashboard({
   );
   const greetingLabel = greetingIndex === 0 ? 'First' : `Alt ${greetingIndex}`;
 
-  const examplesParsed = useMemo(
-    () => parseExampleMessages(data.exampleMessages),
-    [data.exampleMessages]
-  );
+  const examplesParsed = useMemo(() => {
+    // Parsing + rendering massive example blocks is a UI killer. If it's huge, show raw instead.
+    if ((data.exampleMessages || '').length > HUGE_TEXT_CHARS) return null;
+    return parseExampleMessages(data.exampleMessages);
+  }, [data.exampleMessages]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-zinc-950/50">
@@ -254,7 +257,7 @@ export function CharacterDetailDashboard({
               className="col-span-6 lg:col-span-3"
               headerRight={<CopyButton text={data.exampleMessages} />}
             >
-              {examplesParsed.ok ? (
+              {examplesParsed?.ok ? (
                 <div className="max-h-[320px] space-y-3 overflow-y-auto">
                   {examplesParsed.conversations.map((conv, i) => (
                     <div
@@ -287,8 +290,10 @@ export function CharacterDetailDashboard({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="text-sm text-amber-200">Non-standard format. Showing raw.</div>
-                  <CodeBlock text={data.exampleMessages} maxHeightClass="max-h-[200px]" />
+                  <div className="text-sm text-amber-200">
+                    {examplesParsed === null ? 'Too large to parse. Showing raw.' : 'Non-standard format. Showing raw.'}
+                  </div>
+                  <CodeBlock text={data.exampleMessages} maxHeightClass="max-h-[200px]" maxChars={60_000} />
                 </div>
               )}
             </Card>
@@ -301,7 +306,7 @@ export function CharacterDetailDashboard({
               className="col-span-6 md:col-span-3 lg:col-span-2"
               headerRight={<CopyButton text={data.systemPrompt} />}
             >
-              <CodeBlock text={data.systemPrompt} maxHeightClass="max-h-[180px]" />
+              <CodeBlock text={data.systemPrompt} maxHeightClass="max-h-[180px]" maxChars={60_000} />
             </Card>
 
             <Card
@@ -309,7 +314,7 @@ export function CharacterDetailDashboard({
               className="col-span-6 md:col-span-3 lg:col-span-2"
               headerRight={<CopyButton text={data.postHistoryInstructions} />}
             >
-              <CodeBlock text={data.postHistoryInstructions} maxHeightClass="max-h-[180px]" />
+              <CodeBlock text={data.postHistoryInstructions} maxHeightClass="max-h-[180px]" maxChars={60_000} />
             </Card>
 
             <Card
@@ -317,7 +322,7 @@ export function CharacterDetailDashboard({
               className="col-span-6 md:col-span-6 lg:col-span-2"
               headerRight={<CopyButton text={data.creatorNotes} />}
             >
-              <CodeBlock text={data.creatorNotes} maxHeightClass="max-h-[180px]" />
+              <CodeBlock text={data.creatorNotes} maxHeightClass="max-h-[180px]" maxChars={60_000} />
             </Card>
           </div>
 
@@ -356,10 +361,25 @@ export function CharacterDetailDashboard({
                 </div>
               }
             >
-              <CodeBlock
-                text={data.rawJson}
-                maxHeightClass={jsonExpanded ? 'max-h-[600px]' : 'max-h-[200px]'}
-              />
+              {!jsonExpanded ? (
+                <div className="space-y-2">
+                  <div className="text-xs text-zinc-500">
+                    Showing preview. Full JSON is{' '}
+                    <span className="font-mono text-zinc-200">{data.rawJson.length.toLocaleString()}</span> chars.
+                  </div>
+                  <CodeBlock text={data.rawJson} maxHeightClass="max-h-[200px]" maxChars={RAW_JSON_PREVIEW_CHARS} />
+                  <div className="text-xs text-zinc-500">
+                    Tip: use the JSON export button above to open it in a new tab without freezing this view.
+                  </div>
+                </div>
+              ) : (
+                <CodeBlock
+                  text={data.rawJson}
+                  maxHeightClass="max-h-[600px]"
+                  // Even expanded, don't try to render absurdly large blobs.
+                  maxChars={250_000}
+                />
+              )}
             </Card>
           </div>
         </div>

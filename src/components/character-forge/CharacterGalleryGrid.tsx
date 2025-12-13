@@ -163,7 +163,7 @@ export function CharacterGalleryGrid({ selectedId, onSelect, onEdit }: Character
         <div
           className={cn(
             viewMode === 'grid' 
-              ? 'grid grid-cols-2 gap-3' 
+              ? 'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]' 
               : 'flex flex-col gap-1'
           )}
         >

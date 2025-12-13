@@ -132,8 +132,15 @@ characterCardRoutes.post('/import/png', async (c) => {
   const { spec, spec_version } = extractSpec(parsed);
   const png_sha256 = await sha256Hex(bytes);
 
-  // Best-effort dedupe: if exact same PNG already exists, return that record.
-  const existing = prepare<CharacterCardRow>('SELECT * FROM character_cards WHERE png_sha256 = ? LIMIT 1').get(png_sha256) as
+  // Best-effort dedupe:
+  // - Dedupe only when BOTH the PNG bytes and embedded JSON match an existing row.
+  //
+  // Important: there may be multiple rows with the same `png_sha256` (e.g. user edited a card after import,
+  // then re-imported the original PNG). We must match on raw_json too, otherwise a random LIMIT 1 row can
+  // make dedupe appear "broken".
+  const existing = prepare<CharacterCardRow>(
+    'SELECT * FROM character_cards WHERE png_sha256 = ? AND raw_json = ? LIMIT 1',
+  ).get(png_sha256, readResult.raw_json) as
     | CharacterCardRow
     | null;
   if (existing) {

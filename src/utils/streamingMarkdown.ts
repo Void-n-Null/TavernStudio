@@ -122,12 +122,10 @@ export function parseMarkdown(content: string): string {
   try {
     const normalized = normalizeFencedCodeBlocks(content);
     const html = marked.parse(normalized) as string;
-    const result = wrapQuotesInSpans(html);
-    // Debug: check if quotes are being wrapped
-    if (content.includes('"') && !result.includes('md-quote')) {
-      console.log('[parseMarkdown] Quote wrapping failed:', { content, html, result });
-    }
-    return result;
+    // Quote-wrapping does DOMParser + TreeWalker and gets expensive on huge documents.
+    // Keep markdown rendering, but skip extra processing when content is large.
+    if ((content || '').length > 20_000) return html;
+    return wrapQuotesInSpans(html);
   } catch {
     return content;
   }

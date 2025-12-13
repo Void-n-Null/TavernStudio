@@ -10,14 +10,15 @@ export function applyPreviewMacros(text: string, charName: string): string {
 }
 
 export function MarkdownBlock({ content, charName }: { content: string; charName: string }) {
-  const html = useMemo(() => parseMarkdown(applyPreviewMacros(content, charName)), [content, charName]);
+  const LARGE_TEXT_CHARS = 50_000;
+  const previewText = useMemo(() => applyPreviewMacros(content, charName), [content, charName]);
+  const renderAsMarkdown = previewText.length <= LARGE_TEXT_CHARS;
+  const html = useMemo(() => (renderAsMarkdown ? parseMarkdown(previewText) : ''), [previewText, renderAsMarkdown]);
   if (!content?.trim()) return <div className="text-sm italic text-zinc-600">Empty</div>;
-  return (
-    <div
-      className="message-content text-sm leading-relaxed text-zinc-200"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  if (!renderAsMarkdown) {
+    return <div className="text-sm leading-relaxed text-zinc-200 whitespace-pre-wrap break-words">{previewText}</div>;
+  }
+  return <div className="message-content text-sm leading-relaxed text-zinc-200" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export function Card({
@@ -48,8 +49,20 @@ export function Card({
   );
 }
 
-export function CodeBlock({ text, maxHeightClass = 'max-h-[320px]' }: { text: string; maxHeightClass?: string }) {
+export function CodeBlock({
+  text,
+  maxHeightClass = 'max-h-[320px]',
+  maxChars,
+}: {
+  text: string;
+  maxHeightClass?: string;
+  maxChars?: number;
+}) {
   if (!text?.trim()) return <div className="text-sm italic text-zinc-600">Empty</div>;
+  const clipped =
+    typeof maxChars === 'number' && maxChars > 0 && text.length > maxChars
+      ? `${text.slice(0, maxChars)}\n\n… (truncated ${text.length - maxChars} chars)`
+      : text;
   return (
     <pre
       className={cn(
@@ -58,7 +71,7 @@ export function CodeBlock({ text, maxHeightClass = 'max-h-[320px]' }: { text: st
         maxHeightClass
       )}
     >
-      {text}
+      {clipped}
     </pre>
   );
 }

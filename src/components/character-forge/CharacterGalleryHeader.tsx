@@ -3,7 +3,7 @@
  */
 
 import { useRef } from 'react';
-import { Search, Grid3X3, List, SortAsc, SortDesc, Plus, X } from 'lucide-react';
+import { Search, Grid3X3, List, SortAsc, SortDesc, Plus, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useCharacterForgeStore } from '../../store/characterForgeStore';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
@@ -26,6 +26,8 @@ export function CharacterGalleryHeader({ onCreateNew }: CharacterGalleryHeaderPr
     toggleSortDirection,
     filterTags,
     clearFilters,
+    isGalleryFullscreen,
+    toggleGalleryFullscreen,
   } = useCharacterForgeStore();
   
   const hasFilters = searchQuery.length > 0 || filterTags.length > 0;
@@ -36,9 +38,9 @@ export function CharacterGalleryHeader({ onCreateNew }: CharacterGalleryHeaderPr
       <div className="mb-3 flex items-center justify-between">
         <h1 
           className="text-lg font-bold tracking-tight text-zinc-100"
-          style={{ fontFamily: '"Instrument Serif", Georgia, serif' }}
+          style={{ fontFamily: 'Georgia, serif' }}
         >
-          Character Forge
+          Tavern Studio
         </h1>
         <Button
           size="sm"
@@ -139,8 +141,17 @@ export function CharacterGalleryHeader({ onCreateNew }: CharacterGalleryHeaderPr
             <List className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Fullscreen gallery toggle */}
+        <button
+          onClick={toggleGalleryFullscreen}
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+          title={isGalleryFullscreen ? 'Exit fullscreen' : 'Fullscreen gallery'}
+          aria-label={isGalleryFullscreen ? 'Exit fullscreen gallery' : 'Fullscreen gallery'}
+        >
+          {isGalleryFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
       </div>
     </div>
   );
 }
-

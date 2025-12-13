@@ -274,11 +274,13 @@ export function TokenBudgetBar({
             ))}
           </div>
 
-          {/* Position indicator */}
+          {/* Position indicator (transform-based to avoid layout thrash on large pages) */}
           <div
-            className="absolute top-0 h-full w-1 -translate-x-1/2 rounded-full bg-white shadow-lg shadow-white/30 transition-all duration-500"
-            style={{ left: `${Math.min(100, gaugePosition)}%` }}
-          />
+            className="absolute inset-y-0 left-0 w-full will-change-transform transition-transform duration-500"
+            style={{ transform: `translateX(${Math.min(100, gaugePosition)}%)` }}
+          >
+            <div className="h-full w-1 -translate-x-1/2 rounded-full bg-white shadow-lg shadow-white/30" />
+          </div>
         </div>
 
         {/* Current zone indicator */}
@@ -304,7 +306,8 @@ export function TokenBudgetBar({
         <div className="relative h-3 w-full overflow-hidden rounded-full bg-zinc-800/80">
           <div
             className={cn(
-              'h-full transition-all duration-500',
+              // transform-based fill to avoid triggering layout on big DOMs
+              'h-full w-full origin-left will-change-transform transition-transform duration-500',
               fitVerdict === 'ok'
                 ? 'bg-emerald-500/70'
                 : fitVerdict === 'tight'
@@ -313,7 +316,7 @@ export function TokenBudgetBar({
                     ? 'bg-red-500/70'
                     : 'bg-zinc-500/40'
             )}
-            style={{ width: `${Math.min(100, budgetPct)}%` }}
+            style={{ transform: `scaleX(${Math.min(1, budgetPct / 100)})` }}
           />
           {/* Budget marker at 100% */}
           <div className="absolute right-0 top-0 h-full w-px bg-zinc-200/20" />

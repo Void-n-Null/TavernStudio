@@ -12,6 +12,8 @@ import {
   useUpdateCharacterCard,
   useUpdateCardAvatar,
   useDeleteCardAvatar,
+  useImportPngCard,
+  useImportJsonCard,
   getAvatarUrlVersioned,
   getExportPngUrl,
   getExportJsonUrl,
@@ -29,6 +31,7 @@ import { PromptOverridesSection } from './sections/PromptOverridesSection';
 import { CreatorMetadataSection } from './sections/CreatorMetadataSection';
 import { CharacterNoteSection } from './sections/CharacterNoteSection';
 import { cn } from '../../lib/utils';
+import { extractCardFromPngFile } from '../../utils/cardPng';
 
 interface CharacterEditorProps {
   cardId: string | null;
@@ -71,6 +74,41 @@ function createEmptyCard(): TavernCardV2 {
   };
 }
 
+function normalizeToV2Card(input: unknown): TavernCardV2 {
+  if (input && typeof input === 'object') {
+    const parsed = input as any;
+    if (parsed.spec === 'chara_card_v2' || parsed.spec === 'chara_card_v3') {
+      return parsed as TavernCardV2;
+    }
+    if (parsed.data && typeof parsed.data === 'object') {
+      // Looks like V2-ish; trust it.
+      return parsed as TavernCardV2;
+    }
+    // V1 card - wrap in V2 structure
+    return {
+      spec: 'chara_card_v2',
+      spec_version: '2.0',
+      data: {
+        name: parsed.name || '',
+        description: parsed.description || '',
+        personality: parsed.personality || '',
+        scenario: parsed.scenario || '',
+        first_mes: parsed.first_mes || '',
+        mes_example: parsed.mes_example || '',
+        creator_notes: '',
+        system_prompt: '',
+        post_history_instructions: '',
+        alternate_greetings: [],
+        tags: [],
+        creator: '',
+        character_version: '',
+        extensions: {},
+      },
+    };
+  }
+  return createEmptyCard();
+}
+
 export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorProps) {
   const isCreating = !cardId;
   const [activeSection, setActiveSection] = useState<EditorSection>('core');
@@ -92,6 +130,8 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
   const updateCard = useUpdateCharacterCard();
   const updateAvatar = useUpdateCardAvatar();
   const deleteAvatar = useDeleteCardAvatar();
+  const importPng = useImportPngCard();
+  const importJson = useImportJsonCard();
 
   useEffect(() => {
     if (existingCard?.updated_at) setLastSavedAt(existingCard.updated_at);
@@ -102,32 +142,7 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
     if (existingCard && existingCard.raw_json) {
       try {
         const parsed = JSON.parse(existingCard.raw_json);
-        // Normalize to V2 structure
-        if (parsed.spec === 'chara_card_v2' || parsed.spec === 'chara_card_v3') {
-          setFormData(parsed);
-        } else {
-          // V1 card - wrap in V2 structure
-          setFormData({
-            spec: 'chara_card_v2',
-            spec_version: '2.0',
-            data: {
-              name: parsed.name || '',
-              description: parsed.description || '',
-              personality: parsed.personality || '',
-              scenario: parsed.scenario || '',
-              first_mes: parsed.first_mes || '',
-              mes_example: parsed.mes_example || '',
-              creator_notes: '',
-              system_prompt: '',
-              post_history_instructions: '',
-              alternate_greetings: [],
-              tags: [],
-              creator: '',
-              character_version: '',
-              extensions: {},
-            },
-          });
-        }
+        setFormData(normalizeToV2Card(parsed));
       } catch {
         // Invalid JSON, start fresh
         setFormData(createEmptyCard());
@@ -355,48 +370,44 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
           hasPng={existingCard?.has_png ?? false}
           rawJson={JSON.stringify(formData, null, 2)}
           onImportPng={async (file) => {
-            // For now, just update avatar
-            if (cardId) {
-              await updateAvatar.mutateAsync({ id: cardId, file });
+            // Create-mode: import as a new card (same behavior as gallery import).
+            if (!cardId) {
+              const result = await importPng.mutateAsync(file);
+              showToast({ message: `Imported "${result.name}"`, type: 'success' });
+              onSaved(result.id);
+              return;
             }
+
+            // Edit-mode: load JSON from PNG into the editor, and also store the PNG bytes as the card image.
+            const extracted = await extractCardFromPngFile(file);
+            if (!extracted.ok) {
+              throw new Error(extracted.error);
+            }
+
+            setFormData(normalizeToV2Card(extracted.json));
+            dirtyVersionRef.current += 1;
+            setIsDirty(true);
+            setDirtyVersion(dirtyVersionRef.current);
+
+            // Best-effort: store the PNG as the card's image (so export works as expected).
+            await updateAvatar.mutateAsync({ id: cardId, file });
+            showToast({ message: 'PNG loaded into editor', type: 'success' });
           }}
           onImportJson={async (json) => {
-            // Load JSON into form
-            try {
-              if (json.spec === 'chara_card_v2' || json.spec === 'chara_card_v3') {
-                setFormData(json as TavernCardV2);
-              } else if (json.data) {
-                setFormData(json as TavernCardV2);
-              } else {
-                // V1
-                setFormData({
-                  spec: 'chara_card_v2',
-                  spec_version: '2.0',
-                  data: {
-                    name: (json as any).name || '',
-                    description: (json as any).description || '',
-                    personality: (json as any).personality || '',
-                    scenario: (json as any).scenario || '',
-                    first_mes: (json as any).first_mes || '',
-                    mes_example: (json as any).mes_example || '',
-                    creator_notes: '',
-                    system_prompt: '',
-                    post_history_instructions: '',
-                    alternate_greetings: [],
-                    tags: [],
-                    creator: '',
-                    character_version: '',
-                    extensions: {},
-                  },
-                });
-              }
-              dirtyVersionRef.current += 1;
-              setIsDirty(true);
-              setDirtyVersion(dirtyVersionRef.current);
-              showToast({ message: 'JSON loaded into editor', type: 'success' });
-            } catch {
-              showToast({ message: 'Failed to parse JSON', type: 'error' });
+            // Create-mode: import as a new card (same behavior as gallery import).
+            if (!cardId) {
+              const result = await importJson.mutateAsync(json);
+              showToast({ message: `Imported "${result.name}"`, type: 'success' });
+              onSaved(result.id);
+              return;
             }
+
+            // Edit-mode: load JSON into form (user can save to persist).
+            setFormData(normalizeToV2Card(json));
+            dirtyVersionRef.current += 1;
+            setIsDirty(true);
+            setDirtyVersion(dirtyVersionRef.current);
+            showToast({ message: 'JSON loaded into editor', type: 'success' });
           }}
           onExportPng={() => {
             if (cardId) window.open(getExportPngUrl(cardId), '_blank');
@@ -404,7 +415,7 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
           onExportJson={() => {
             if (cardId) window.open(getExportJsonUrl(cardId), '_blank');
           }}
-          isImporting={updateAvatar.isPending}
+          isImporting={updateAvatar.isPending || importPng.isPending || importJson.isPending}
         />
       </div>
       
