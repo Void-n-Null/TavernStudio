@@ -1,3 +1,6 @@
+/* Font imports for Character Forge */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+
 @import "tailwindcss";
 @source "../node_modules/streamdown/dist/*.js";
 
@@ -56,4 +59,65 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* ============ Character Forge Animations ============ */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes forgeEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.forge-page {
+  animation: forgeEnter 0.4s ease-out;
+}
+
+.card-tile {
+  animation: fadeSlideIn 0.4s ease-out both;
+}
+
+/* Stagger animation for card tiles */
+.card-tile:nth-child(1) { animation-delay: 0ms; }
+.card-tile:nth-child(2) { animation-delay: 40ms; }
+.card-tile:nth-child(3) { animation-delay: 80ms; }
+.card-tile:nth-child(4) { animation-delay: 120ms; }
+.card-tile:nth-child(5) { animation-delay: 160ms; }
+.card-tile:nth-child(6) { animation-delay: 200ms; }
+.card-tile:nth-child(7) { animation-delay: 240ms; }
+.card-tile:nth-child(8) { animation-delay: 280ms; }
+.card-tile:nth-child(9) { animation-delay: 320ms; }
+.card-tile:nth-child(10) { animation-delay: 360ms; }
+.card-tile:nth-child(n+11) { animation-delay: 400ms; }
+
+/* Card glow effect */
+.card-tile::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(99, 102, 241, 0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.card-tile:hover::before {
+  opacity: 1;
 }

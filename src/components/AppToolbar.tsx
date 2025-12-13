@@ -1,4 +1,5 @@
-import { Settings } from 'lucide-react';
+import { Settings, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useHeaderConfig, useLayoutConfig } from '../hooks/queries/useProfiles';
@@ -130,15 +131,27 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
         ) : null}
       </div>
 
-      <Button
-        onClick={onOpenSettings}
-        variant={header.settingsButtonVariant}
-        size="icon"
-        className="shrink-0"
-        aria-label="Open settings"
-      >
-        <Settings className="h-5 w-5" />
-      </Button>
+      <div className="flex items-center gap-2">
+        <Link to="/forge">
+          <Button
+            variant={header.settingsButtonVariant}
+            size="icon"
+            className="shrink-0"
+            aria-label="Character Forge"
+          >
+            <Users className="h-5 w-5" />
+          </Button>
+        </Link>
+        <Button
+          onClick={onOpenSettings}
+          variant={header.settingsButtonVariant}
+          size="icon"
+          className="shrink-0"
+          aria-label="Open settings"
+        >
+          <Settings className="h-5 w-5" />
+        </Button>
+      </div>
     </div>
   );
 

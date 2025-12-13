@@ -44,6 +44,11 @@ export const toast = {
   info: (msg: string) => useToastStore.getState().add(msg, 'info'),
 };
 
+// showToast helper for consistent API
+export function showToast({ message, type = 'info' }: { message: string; type?: ToastType }) {
+  useToastStore.getState().add(message, type);
+}
+
 const icons: Record<ToastType, typeof Check> = {
   success: Check,
   error: X,

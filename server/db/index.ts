@@ -131,6 +131,35 @@ export function initDb(): Database {
     )
   `);
 
+  // ============ Character Cards (SillyTavern / Tavern cards) ============
+  // Stores the *raw* JSON payload for lossless round-tripping of unknown fields/extensions.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS character_cards (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      spec TEXT,
+      spec_version TEXT,
+      source TEXT NOT NULL DEFAULT 'unknown', /* png_chara | png_ccv3 | json | unknown */
+      raw_json TEXT NOT NULL,
+      png_blob BLOB,
+      png_mime TEXT,
+      png_sha256 TEXT,
+      png_updated_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  // Existing DBs won’t have these columns; add them safely.
+  try { db.run('ALTER TABLE character_cards ADD COLUMN png_blob BLOB'); } catch {}
+  try { db.run('ALTER TABLE character_cards ADD COLUMN png_mime TEXT'); } catch {}
+  try { db.run('ALTER TABLE character_cards ADD COLUMN png_sha256 TEXT'); } catch {}
+  try { db.run('ALTER TABLE character_cards ADD COLUMN png_updated_at INTEGER'); } catch {}
+
+  db.run('CREATE INDEX IF NOT EXISTS idx_character_cards_name ON character_cards(name)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_character_cards_spec ON character_cards(spec)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_character_cards_png_sha256 ON character_cards(png_sha256)');
+
   // ============ AI Provider Config / Secrets ============
   // Non-secret provider config (safe to return to UI).
   db.run(`

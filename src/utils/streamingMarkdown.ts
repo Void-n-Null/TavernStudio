@@ -14,6 +14,48 @@ const marked = new Marked({
   breaks: true,
 });
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isSafeUrl(href: string): boolean {
+  // Allow common safe protocols only.
+  // Note: relative URLs ("./x", "/x") are allowed.
+  const trimmed = (href || '').trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../') || trimmed.startsWith('#')) return true;
+  return /^(https?:|mailto:)/i.test(trimmed);
+}
+
+// Harden marked output: do NOT allow raw HTML, and disallow javascript: links.
+// This keeps us safe even when rendering user-supplied markdown via innerHTML.
+marked.use({
+  renderer: {
+    html(html: string) {
+      // Render raw HTML as text.
+      return escapeHtml(html);
+    },
+    link(href: string | null, title: string | null, text: string) {
+      const safeHref = href && isSafeUrl(href) ? href : null;
+      const safeText = escapeHtml(text);
+      if (!safeHref) return safeText;
+      const safeTitle = title ? ` title="${escapeHtml(title)}"` : '';
+      return `<a href="${escapeHtml(safeHref)}"${safeTitle} rel="noreferrer noopener" target="_blank">${safeText}</a>`;
+    },
+    image(href: string | null, title: string | null, text: string) {
+      // Images in greetings previews are more annoying than useful; disallow them for now.
+      // Render as plain text alt instead.
+      void href; void title;
+      return escapeHtml(text || '');
+    },
+  } as any,
+});
+
 /**
  * Best-effort normalization for fenced code blocks.
  *

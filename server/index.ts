@@ -10,6 +10,7 @@ import designTemplateRoutes from './routes/designTemplates';
 import { fontRoutes } from './routes/fonts';
 import { seedDemoDataIfEmpty } from './seed';
 import { aiProviderRoutes } from './routes/aiProviders';
+import { characterCardRoutes } from './routes/characterCards';
 
 const app = new Hono();
 
@@ -42,6 +43,7 @@ app.route('/api/profiles', profileRoutes);
 app.route('/api/design-templates', designTemplateRoutes);
 app.route('/api/fonts', fontRoutes);
 app.route('/api/ai/providers', aiProviderRoutes);
+app.route('/api/character-cards', characterCardRoutes);
 
 // Initialize database and start server
 const port = Number(process.env.PORT) || 3001;

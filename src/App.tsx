@@ -7,6 +7,7 @@ import { usePageBackgroundConfig, useTypographyConfig } from './hooks/queries/us
 import { useCustomFontLoader } from './hooks/queries/useFonts';
 import { StreamingDebugPanel } from './components/streaming/StreamingDebugPanel';
 import { AiConnectionDebugPanel } from './components/ai/AiConnectionDebugPanel';
+import { CharacterCardDebugPanel } from './components/character/CharacterCardDebugPanel';
 import { ToastContainer } from './components/ui/toast';
 
 /**
@@ -65,6 +66,7 @@ export function App() {
 
       {import.meta.env.DEV ? <StreamingDebugPanel /> : null}
       {import.meta.env.DEV ? <AiConnectionDebugPanel /> : null}
+      {import.meta.env.DEV ? <CharacterCardDebugPanel /> : null}
       <ToastContainer />
     </div>
   );
