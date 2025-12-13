@@ -76,6 +76,12 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
   const [activeSection, setActiveSection] = useState<EditorSection>('core');
   const [isDirty, setIsDirty] = useState(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const idleSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  // Monotonic counter for local edits. Used to avoid "late save response clears dirty state"
+  // when the user typed more while a save was in flight.
+  const dirtyVersionRef = useRef(0);
+  const [dirtyVersion, setDirtyVersion] = useState(0);
   
   // Form state - matches V2 data structure
   const [formData, setFormData] = useState<TavernCardV2>(createEmptyCard());
@@ -86,6 +92,10 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
   const updateCard = useUpdateCharacterCard();
   const updateAvatar = useUpdateCardAvatar();
   const deleteAvatar = useDeleteCardAvatar();
+
+  useEffect(() => {
+    if (existingCard?.updated_at) setLastSavedAt(existingCard.updated_at);
+  }, [existingCard?.updated_at]);
   
   // Load existing card data
   useEffect(() => {
@@ -137,6 +147,8 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
         [field]: value,
       },
     }));
+    dirtyVersionRef.current += 1;
+    setDirtyVersion(dirtyVersionRef.current);
     setIsDirty(true);
   };
   
@@ -154,6 +166,7 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
   // Save handler
   const handleSave = useCallback(async (opts?: { silent?: boolean; reason?: 'manual' | 'autosave' | 'hotkey' }) => {
     const silent = Boolean(opts?.silent);
+    const saveDirtyVersion = dirtyVersionRef.current;
     if (hasErrors) {
       if (!silent) showToast({ message: 'Please fix errors before saving', type: 'error' });
       return;
@@ -163,12 +176,20 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
       if (isCreating) {
         const result = await createCard.mutateAsync(formData);
         if (!silent) showToast({ message: 'Character created', type: 'success' });
-        setIsDirty(false);
+        // In create mode, we navigate to edit and remount anyway, but keep semantics correct.
+        if (dirtyVersionRef.current === saveDirtyVersion) {
+          setIsDirty(false);
+          setLastSavedAt(Date.now());
+        }
         onSaved(result.id);
       } else {
         await updateCard.mutateAsync({ id: cardId, card: formData });
         if (!silent) showToast({ message: 'Character saved', type: 'success' });
-        setIsDirty(false);
+        // Only clear dirty if nothing changed while the save was in-flight.
+        if (dirtyVersionRef.current === saveDirtyVersion) {
+          setIsDirty(false);
+          setLastSavedAt(Date.now());
+        }
         onSaved(cardId);
       }
     } catch (err) {
@@ -213,6 +234,41 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
       if (autosaveTimerRef.current) clearInterval(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     };
+  }, [createCard.isPending, handleSave, hasErrors, isDirty, updateCard.isPending]);
+
+  // Idle-based autosave: save shortly after the user stops editing.
+  useEffect(() => {
+    if (idleSaveTimerRef.current) clearTimeout(idleSaveTimerRef.current);
+
+    // Only schedule when there are changes worth saving.
+    if (!isDirty) return;
+    if (hasErrors) return;
+    if (createCard.isPending || updateCard.isPending) return;
+
+    idleSaveTimerRef.current = setTimeout(() => {
+      if (!isDirty) return;
+      if (hasErrors) return;
+      if (createCard.isPending || updateCard.isPending) return;
+      void handleSave({ silent: true, reason: 'autosave' });
+    }, 2_000);
+
+    return () => {
+      if (idleSaveTimerRef.current) clearTimeout(idleSaveTimerRef.current);
+      idleSaveTimerRef.current = null;
+    };
+  }, [createCard.isPending, dirtyVersion, handleSave, hasErrors, isDirty, updateCard.isPending]);
+
+  // If the user switches tabs / hides the page, try to flush a save immediately.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (!isDirty) return;
+      if (hasErrors) return;
+      if (createCard.isPending || updateCard.isPending) return;
+      void handleSave({ silent: true, reason: 'autosave' });
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [createCard.isPending, handleSave, hasErrors, isDirty, updateCard.isPending]);
   
   // Avatar upload
@@ -268,9 +324,13 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
         </div>
         
         <div className="flex items-center gap-3">
-          {isDirty && (
+          {createCard.isPending || updateCard.isPending ? (
+            <span className="text-xs text-violet-300">Saving…</span>
+          ) : isDirty ? (
             <span className="text-xs text-amber-400">Unsaved changes</span>
-          )}
+          ) : lastSavedAt ? (
+            <span className="text-xs text-zinc-500">Saved {new Date(lastSavedAt).toLocaleTimeString()}</span>
+          ) : null}
           <Button
             onClick={() => handleSave({ silent: false, reason: 'manual' })}
             disabled={hasErrors || createCard.isPending || updateCard.isPending}
@@ -330,7 +390,9 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
                   },
                 });
               }
+              dirtyVersionRef.current += 1;
               setIsDirty(true);
+              setDirtyVersion(dirtyVersionRef.current);
               showToast({ message: 'JSON loaded into editor', type: 'success' });
             } catch {
               showToast({ message: 'Failed to parse JSON', type: 'error' });
