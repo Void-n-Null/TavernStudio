@@ -1,9 +1,7 @@
-import { memo, useCallback, useMemo, useRef, useEffect, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAnimationConfig, useLayoutConfig, useActiveMessageStyle, useMessageListBackgroundConfig } from '../../hooks/queries/useProfiles';
-import { gapMap, type GradientDirection } from '../../types/messageStyle';
-import { useOptimisticValue } from '../../hooks/useOptimisticValue';
 import { useAddMessage, useChatActivePathNodeIds, useChatNode, useChatSpeaker, useDefaultChatId, useDeleteMessage, useEditMessage, useSwitchBranch } from '../../hooks/queries';
 import { queryKeys } from '../../lib/queryClient';
 import type { ChatFull } from '../../api/client';
@@ -13,6 +11,8 @@ import { pickRandomMessage } from '../../utils/generateDemoData';
 import { useMessageListLazyWindowing } from './hooks/useMessageListLazyWindowing';
 import { useMessageListScrollFollow } from './hooks/useMessageListScrollFollow';
 import { useMessageListBranchSwitching } from './hooks/useMessageListBranchSwitching';
+import { useMessageListResize } from './hooks/useMessageListResize';
+import { useMessageListVisualStyles } from './hooks/useMessageListVisualStyles';
 
 // Lazy rendering config - render last N messages, load more on scroll
 const INITIAL_RENDER_LIMIT = 100;
@@ -56,253 +56,28 @@ export function MessageList() {
   const storedWidth = layoutConfig.containerWidth;
   const { setLayout } = useActiveMessageStyle();
   const showMessageDividers = layoutConfig.showMessageDividers;
-  
-  // Message list background config
+
   const messageListBg = useMessageListBackgroundConfig();
   
-  // Drag state
-  const dragRef = useRef<{ edge: 'left' | 'right'; startX: number; startWidthPercent: number } | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragEdgeRef = useRef<'left' | 'right' | null>(null);
+  const {
+    isMobile,
+    isDragging,
+    dragEdge,
+    wrapperStyle,
+    leftHandleStyle,
+    rightHandleStyle,
+    handleMouseDown,
+  } = useMessageListResize({
+    wrapperRef,
+    storedWidth,
+    setLayout,
+  });
 
-  // Optimistic local state for drag - keeps value until server syncs
-  const [currentWidth, setLocalWidth] = useOptimisticValue(storedWidth);
-  
-  // Refs for values accessed in event handlers (prevents effect re-running during drag)
-  const currentWidthRef = useRef(currentWidth);
-  const setLocalWidthRef = useRef(setLocalWidth);
-  const setLayoutRef = useRef(setLayout);
-  currentWidthRef.current = currentWidth;
-  setLocalWidthRef.current = setLocalWidth;
-  setLayoutRef.current = setLayout;
-  
-  // Check for mobile on mount and resize
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-  
-  // Handle drag start - capture initial position and width
-  const handleMouseDown = useCallback((edge: 'left' | 'right') => (e: React.MouseEvent) => {
-    e.preventDefault();
-    dragRef.current = {
-      edge,
-      startX: e.clientX,
-      startWidthPercent: currentWidthRef.current,
-    };
-    dragEdgeRef.current = edge;
-    setIsDragging(true);
-
-    const container = wrapperRef.current;
-    if (container) {
-      container.style.width = `${currentWidthRef.current}%`;
-    }
-  }, []); // No deps - uses refs
-
-  // Handle drag move and end - attach once per drag (no React state updates per mousemove)
-  useEffect(() => {
-    if (!isDragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const wrapper = wrapperRef.current;
-      if (!dragRef.current || !wrapper) return;
-
-      const { edge, startX, startWidthPercent } = dragRef.current;
-      const parentWidth = wrapper.parentElement?.clientWidth ?? window.innerWidth;
-
-      const deltaX = e.clientX - startX;
-      const deltaPercent = (deltaX * 2 / parentWidth) * 100;
-
-      let newWidthPercent: number;
-      if (edge === 'right') {
-        newWidthPercent = startWidthPercent + deltaPercent;
-      } else {
-        newWidthPercent = startWidthPercent - deltaPercent;
-      }
-
-      newWidthPercent = Math.max(20, Math.min(100, newWidthPercent));
-      currentWidthRef.current = newWidthPercent;
-      wrapper.style.width = `${newWidthPercent}%`;
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      const finalWidth = currentWidthRef.current;
-      dragRef.current = null;
-      dragEdgeRef.current = null;
-
-      // Sync local UI state (one render) and persist to store.
-      setLocalWidthRef.current(finalWidth);
-      setLayoutRef.current({ containerWidth: finalWidth });
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
-  
-  // Wrapper styles - no transition, instant response
-  const wrapperStyle: CSSProperties = {
-    width: isMobile ? '100%' : `${(isDragging ? currentWidthRef.current : currentWidth)}%`,
-    margin: '0 auto',
-    position: 'relative',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-  
-  // Resize handle styles
-  const handleStyle: CSSProperties = {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: '8px',
-    cursor: 'col-resize',
-    zIndex: 10,
-  };
-  
-  const leftHandleStyle: CSSProperties = { ...handleStyle, left: '-4px' };
-  const rightHandleStyle: CSSProperties = { ...handleStyle, right: '-4px' };
-  
-  // Compute message list background style
-  const gradientDirectionMap: Record<GradientDirection, string> = {
-    'to-bottom': 'to bottom',
-    'to-top': 'to top',
-    'to-right': 'to right',
-    'to-left': 'to left',
-    'to-bottom-right': 'to bottom right',
-    'to-bottom-left': 'to bottom left',
-  };
-  
-  // Helper to apply opacity to a color (supports hex, rgb, rgba)
-  const applyOpacityToColor = (color: string | undefined, opacity: number): string => {
-    if (!color) return `rgba(0, 0, 0, ${opacity})`;
-    // If already rgba, adjust the alpha
-    if (color.startsWith('rgba')) {
-      return color.replace(/[\d.]+\)$/, `${opacity})`);
-    }
-    // If rgb, convert to rgba
-    if (color.startsWith('rgb(')) {
-      return color.replace('rgb(', 'rgba(').replace(')', `, ${opacity})`);
-    }
-    // If hex, convert to rgba
-    if (color.startsWith('#')) {
-      const hex = color.slice(1);
-      const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16);
-      const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16);
-      const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16);
-      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-    }
-    return color;
-  };
-  
-  const messageListBackgroundStyle: CSSProperties = useMemo(() => {
-    if (!messageListBg.enabled) return {};
-    
-    const opacity = messageListBg.opacity / 100;
-    const baseStyle: CSSProperties = {
-      borderRadius: '0px',
-    };
-    
-    // Add backdrop blur if set
-    if (messageListBg.blur > 0) {
-      baseStyle.backdropFilter = `blur(${messageListBg.blur}px)`;
-      baseStyle.WebkitBackdropFilter = `blur(${messageListBg.blur}px)`;
-    }
-    
-    if (messageListBg.type === 'none') {
-      return baseStyle;
-    }
-    
-    if (messageListBg.type === 'color') {
-      // Apply opacity directly to the color, not the container
-      return {
-        ...baseStyle,
-        backgroundColor: applyOpacityToColor(messageListBg.color, opacity),
-      };
-    }
-    
-    if (messageListBg.type === 'gradient') {
-      const direction = gradientDirectionMap[messageListBg.gradientDirection];
-      // Apply opacity to gradient colors
-      const fromColor = applyOpacityToColor(messageListBg.gradientFrom, opacity);
-      const toColor = applyOpacityToColor(messageListBg.gradientTo, opacity);
-      return {
-        ...baseStyle,
-        background: `linear-gradient(${direction}, ${fromColor}, ${toColor})`,
-      };
-    }
-    
-    return baseStyle;
-  }, [messageListBg]);
-
-  // Divider + spacer styles (used when dividers are enabled)
-  const separatorStyles = useMemo(() => {
-    const messageGapPx = gapMap[layoutConfig.messageGap] ?? '0px';
-    const groupGapPx = gapMap[layoutConfig.groupGap] ?? messageGapPx;
-
-    const opacity = (layoutConfig.dividerOpacity ?? 0) / 100;
-    const bg = applyOpacityToColor(layoutConfig.dividerColor, opacity);
-    const width = `${Math.max(0, Math.min(100, layoutConfig.dividerWidth ?? 100))}%`;
-
-    const baseDivider: CSSProperties = {
-      background: bg,
-      width,
-      marginLeft: 'auto',
-      marginRight: 'auto',
-    };
-
-    // NOTE: `.message-divider` is 1px tall (see `src/components/chat/chat.css`).
-    // We want: marginTop + dividerHeight + marginBottom === configured gap.
-    const dividerForGap = (gapPx: string): CSSProperties => {
-      const dividerHeightPx = '1px';
-      // Clamp at 0 to avoid negative margins when gap < divider height.
-      const margin = `max(0px, calc((${gapPx} - ${dividerHeightPx}) / 2))`;
-      return {
-        ...baseDivider,
-        marginTop: margin,
-        marginBottom: margin,
-      };
-    };
-
-    const spacer: CSSProperties = {
-      height: messageGapPx,
-    };
-
-    return {
-      messageGapPx,
-      groupGapPx,
-      dividerMessage: dividerForGap(messageGapPx),
-      dividerGroup: dividerForGap(groupGapPx),
-      spacer,
-    };
-  }, [
-    layoutConfig.messageGap,
-    layoutConfig.groupGap,
-    layoutConfig.dividerColor,
-    layoutConfig.dividerOpacity,
-    layoutConfig.dividerWidth,
-  ]);
-
-  // When dividers are enabled, we want *divider-controlled* spacing (not the fixed CSS gap).
-  const messageListContainerStyle: CSSProperties = useMemo(() => {
-    return {
-      ...messageListBackgroundStyle,
-    };
-  }, [messageListBackgroundStyle]);
-
-  const messageListContentStyle: CSSProperties = useMemo(() => {
-    // `.message-list-content` owns the fixed CSS gap; when dividers are enabled, we zero it out
-    // so spacing comes from the divider renderer instead.
-    return showMessageDividers ? { gap: 0 } : {};
-  }, [showMessageDividers]);
+  const { messageListContainerStyle, messageListContentStyle, separatorStyles } = useMessageListVisualStyles({
+    messageListBg,
+    layoutConfig,
+    showMessageDividers,
+  });
 
   const queryClient = useQueryClient();
 
@@ -402,7 +177,7 @@ export function MessageList() {
       ref={wrapperRef}
       style={wrapperStyle}
       data-dragging={isDragging}
-      data-drag-edge={dragEdgeRef.current ?? undefined}
+      data-drag-edge={dragEdge ?? undefined}
     >
       {/* Left resize handle - hidden on mobile */}
       {!isMobile && (
