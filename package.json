@@ -7,6 +7,7 @@
     "dev": "bun run dev:server & bun run dev:client",
     "dev:client": "vite",
     "dev:server": "bun run --watch server/index.ts",
+    "tierlist": "bun run scripts/divide-or-be-conquered-tierlist.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
