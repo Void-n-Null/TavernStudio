@@ -2,4 +2,4 @@
 export * from './chats';
 export * from './useSpeakers';
 export * from './useSettings';
-export * from './useProfiles';
+export * from './profiles';
