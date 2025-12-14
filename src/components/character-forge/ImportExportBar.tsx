@@ -10,7 +10,7 @@ import { showToast } from '../ui/toast';
 interface ImportExportBarProps {
   cardId: string | null;
   hasPng: boolean;
-  rawJson: string;
+  getRawJson: () => string;
   onImportPng: (file: File) => Promise<void>;
   onImportJson: (json: Record<string, unknown>) => Promise<void>;
   onExportPng: () => void;
@@ -21,7 +21,7 @@ interface ImportExportBarProps {
 export function ImportExportBar({
   cardId,
   hasPng,
-  rawJson,
+  getRawJson,
   onImportPng,
   onImportJson,
   onExportPng,
@@ -71,7 +71,7 @@ export function ImportExportBar({
   
   const handleCopyJson = async () => {
     try {
-      await navigator.clipboard.writeText(rawJson);
+      await navigator.clipboard.writeText(getRawJson());
       showToast({ message: 'Copied to clipboard', type: 'success' });
     } catch {
       showToast({ message: 'Failed to copy', type: 'error' });

@@ -75,6 +75,7 @@ export function CharacterDetailInsights({
 
   useEffect(() => {
     let cancelled = false;
+    let debounceTimer: number | null = null;
     setTokenError(null);
     setTokenStats(null);
 
@@ -104,9 +105,14 @@ export function CharacterDetailInsights({
       }
     };
 
-    void run();
+    debounceTimer = window.setTimeout(() => {
+      void run();
+    }, 250);
     return () => {
       cancelled = true;
+      if (debounceTimer != null) {
+        window.clearTimeout(debounceTimer);
+      }
     };
   }, [
     allGreetings,
