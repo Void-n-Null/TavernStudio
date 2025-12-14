@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useEffect, useState, useLayoutEffect } from 'react';
+import { memo, useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAnimationConfig, useLayoutConfig, useActiveMessageStyle, useMessageListBackgroundConfig } from '../../hooks/queries/useProfiles';
@@ -10,10 +10,15 @@ import type { ChatFull } from '../../api/client';
 import { MessageItem } from './MessageItem';
 import { MarkdownStyles } from './MarkdownStyles';
 import { pickRandomMessage } from '../../utils/generateDemoData';
+import { useMessageListLazyWindowing } from './hooks/useMessageListLazyWindowing';
+import { useMessageListScrollFollow } from './hooks/useMessageListScrollFollow';
+import { useMessageListBranchSwitching } from './hooks/useMessageListBranchSwitching';
 
 // Lazy rendering config - render last N messages, load more on scroll
 const INITIAL_RENDER_LIMIT = 100;
 const LOAD_MORE_BATCH = 50;
+const LOAD_MORE_AT_TOP_PX = 320;
+const TRIM_BACK_AT_BOTTOM_PX = 480;
 
 /**
  * Message list container with optimizations.
@@ -33,56 +38,13 @@ export function MessageList() {
   const contentRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  
-  // Scroll anchoring state for branch switching
-  const pendingScrollAnchor = useRef<{
-    parentId: string;          // Parent of the branched node (stable reference)
-    offsetFromTop: number;     // Where the branched item was on screen (relative to viewport)
-    viewportTop: number;       // Element's top relative to document
-    direction: 'prev' | 'next'; // Direction of the switch for animation
-  } | null>(null);
-  
+
   // Flag to prevent auto-scroll from interfering with branch switch scroll restoration
   const skipAutoScrollRef = useRef(false);
 
-  // ============ Pinned-to-bottom scroll follow ============
-  // If true, keep the scroll pinned to the bottom as content grows (e.g. streaming).
-  // The moment the user scrolls up, disable follow until they return to bottom.
+  // Shared scroll bookkeeping (used by multiple behaviors)
   const followRef = useRef(true);
   const lastScrollTopRef = useRef(0);
-  const userScrollIntentRef = useRef(false);
-  const userScrollIntentTimeoutRef = useRef<number | null>(null);
-  const followScrollRafRef = useRef<number | null>(null);
-
-  const scheduleScrollToBottom = useCallback(() => {
-    if (followScrollRafRef.current != null) return;
-    if (typeof requestAnimationFrame !== 'function') return;
-    followScrollRafRef.current = requestAnimationFrame(() => {
-      followScrollRafRef.current = null;
-      const container = containerRef.current;
-      if (!container) return;
-      if (!followRef.current) return;
-      if (skipAutoScrollRef.current) return;
-
-      // Clamp to bottom.
-      container.scrollTop = container.scrollHeight;
-      lastScrollTopRef.current = container.scrollTop;
-    });
-  }, []);
-  
-  // Animation state for branch switching
-  const [branchAnimation, setBranchAnimation] = useState<{
-    active: boolean;
-    direction: 'prev' | 'next';
-    parentId: string;  // Parent of branch point - messages after this should animate
-    oldSiblingId: string;  // The sibling we're switching AWAY from - only animate when NOT in path
-    id: number;  // Unique ID to prevent animation restart on re-renders
-  } | null>(null);
-  const animationIdCounter = useRef(0);
-  
-  // Lazy rendering - only render last N messages, load more on scroll up
-  const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT);
-  const lazyRenderPathRef = useRef<{ length: number; firstId: string | null }>({ length: 0, firstId: null });
   
   // Get animation settings
   const animationConfig = useAnimationConfig();
@@ -119,107 +81,6 @@ export function MessageList() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Keep the viewport pinned to the bottom while following, even when content height changes
-  // without React re-rendering (streaming markdown, image loads, etc).
-  useEffect(() => {
-    const contentEl = contentRef.current;
-    if (!contentEl) return;
-
-    if (typeof ResizeObserver !== 'function') {
-      // No ResizeObserver: we still have the "new message" auto-scroll below, but streaming
-      // height changes won't be perfectly pinned on ancient browsers.
-      return;
-    }
-
-    const ro = new ResizeObserver(() => {
-      // Avoid yanking during branch-switch scroll restoration.
-      if (skipAutoScrollRef.current) return;
-      if (!followRef.current) return;
-      scheduleScrollToBottom();
-    });
-
-    ro.observe(contentEl);
-
-    // Initial pin (e.g., first load of a long chat).
-    scheduleScrollToBottom();
-
-    return () => {
-      ro.disconnect();
-      if (followScrollRafRef.current != null && typeof cancelAnimationFrame === 'function') {
-        cancelAnimationFrame(followScrollRafRef.current);
-        followScrollRafRef.current = null;
-      }
-    };
-  }, [scheduleScrollToBottom]);
-
-  // Track whether user is "following" the bottom based on scroll behavior.
-  // This is input-agnostic: wheel, touch, scrollbar drag will all count as "user intent".
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const REENABLE_AT_BOTTOM_PX = 8;
-    const INTENT_TTL_MS = 160;
-
-    const distanceToBottom = () => container.scrollHeight - container.clientHeight - container.scrollTop;
-    const isAtBottom = () => distanceToBottom() <= REENABLE_AT_BOTTOM_PX;
-
-    const markUserIntent = () => {
-      userScrollIntentRef.current = true;
-      if (userScrollIntentTimeoutRef.current != null) {
-        window.clearTimeout(userScrollIntentTimeoutRef.current);
-      }
-      userScrollIntentTimeoutRef.current = window.setTimeout(() => {
-        userScrollIntentRef.current = false;
-        userScrollIntentTimeoutRef.current = null;
-      }, INTENT_TTL_MS);
-    };
-
-    const handleScroll = () => {
-      const current = container.scrollTop;
-      const prev = lastScrollTopRef.current;
-      const delta = current - prev;
-
-      if (followRef.current) {
-        // Disengage the instant the user scrolls up.
-        if (userScrollIntentRef.current && delta < 0) {
-          followRef.current = false;
-        }
-      } else {
-        // Re-engage only when the user returns to (basically) the bottom.
-        if (isAtBottom()) {
-          followRef.current = true;
-        }
-      }
-
-      lastScrollTopRef.current = current;
-    };
-
-    // Initialize refs from current scroll position.
-    lastScrollTopRef.current = container.scrollTop;
-
-    // Scroll events on the container.
-    container.addEventListener('scroll', handleScroll, { passive: true });
-
-    // Mark intent for the common input modalities.
-    container.addEventListener('wheel', markUserIntent, { passive: true });
-    container.addEventListener('touchstart', markUserIntent, { passive: true });
-    container.addEventListener('touchmove', markUserIntent, { passive: true });
-    container.addEventListener('pointerdown', markUserIntent, { passive: true });
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      container.removeEventListener('wheel', markUserIntent);
-      container.removeEventListener('touchstart', markUserIntent);
-      container.removeEventListener('touchmove', markUserIntent);
-      container.removeEventListener('pointerdown', markUserIntent);
-      if (userScrollIntentTimeoutRef.current != null) {
-        window.clearTimeout(userScrollIntentTimeoutRef.current);
-        userScrollIntentTimeoutRef.current = null;
-      }
-    };
   }, []);
   
   // Handle drag start - capture initial position and width
@@ -471,39 +332,26 @@ export function MessageList() {
     return queryClient.getQueryData<ChatFull>(queryKeys.chats.detail(chatId));
   }, [chatId, queryClient]);
 
-  // Reset render limit when branch changes (path changes significantly)
-  useEffect(() => {
-    const pathLength = activeNodeIds.length;
-    const firstId = activeNodeIds[0] ?? null;
-    const prev = lazyRenderPathRef.current;
-    
-    // Detect branch switch: first node changed (different branch) or big length change
-    const branchChanged = firstId !== prev.firstId;
-    const significantLengthChange = Math.abs(pathLength - prev.length) > 1;
-    
-    if (branchChanged || significantLengthChange) {
-      setRenderLimit(INITIAL_RENDER_LIMIT);
-    }
-    lazyRenderPathRef.current = { length: pathLength, firstId };
-  }, [activeNodeIds]);
+  const { visibleNodeIds, tryPrependMore, tryTrimBackDown } = useMessageListLazyWindowing({
+    containerRef,
+    activeNodeIds,
+    skipAutoScrollRef,
+    lastScrollTopRef,
+    initialRenderLimit: INITIAL_RENDER_LIMIT,
+    loadMoreBatch: LOAD_MORE_BATCH,
+  });
 
-  // Compute which messages to actually render (last N node IDs of the active path)
-  const visibleNodeIds = useMemo(() => {
-    if (activeNodeIds.length <= renderLimit) {
-      return { ids: activeNodeIds, hiddenCount: 0, startIndex: 0 };
-    }
-    const startIndex = activeNodeIds.length - renderLimit;
-    return {
-      ids: activeNodeIds.slice(startIndex),
-      hiddenCount: startIndex,
-      startIndex,
-    };
-  }, [activeNodeIds, renderLimit]);
-
-  // Load more messages when clicking the "load more" button
-  const handleLoadMore = useCallback(() => {
-    setRenderLimit(prev => prev + LOAD_MORE_BATCH);
-  }, []);
+  useMessageListScrollFollow({
+    containerRef,
+    contentRef,
+    skipAutoScrollRef,
+    followRef,
+    lastScrollTopRef,
+    tryPrependMore,
+    tryTrimBackDown,
+    loadMoreAtTopPx: LOAD_MORE_AT_TOP_PX,
+    trimBackAtBottomPx: TRIM_BACK_AT_BOTTOM_PX,
+  });
 
   // Stable callbacks - use refs to avoid re-creating on every render
   const handleEdit = useCallback((nodeId: string, content: string) => {
@@ -519,260 +367,24 @@ export function MessageList() {
     console.log('Create branch from:', nodeId);
   }, []);
 
-  // Create a new branch with demo content
-  const handleCreateBranch = useCallback(async (nodeId: string) => {
-    const chat = getChatSnapshot();
-    if (!chat) return;
-
-    const currentNodes = new Map(chat.nodes.map(n => [n.id, n]));
-    const currentSpeakers = new Map(chat.speakers.map(s => [s.id, s]));
-
-    const node = currentNodes.get(nodeId);
-    if (!node?.parent_id) return;
-    
-    const parent = currentNodes.get(node.parent_id);
-    if (!parent) return;
-    
-    // Capture scroll anchor BEFORE creating the new branch (same as handleSwitchBranch)
-    const container = containerRef.current;
-    const branchedElement = container?.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null;
-    
-    if (branchedElement && container) {
-      const containerRect = container.getBoundingClientRect();
-      const elementRect = branchedElement.getBoundingClientRect();
-      pendingScrollAnchor.current = {
-        parentId: node.parent_id,
-        offsetFromTop: elementRect.top - containerRect.top,
-        viewportTop: elementRect.top,
-        direction: 'next', // Creating new branch is always "next"
-      };
-      skipAutoScrollRef.current = true;
-      
-      // Trigger animation if enabled - nodeId is the sibling we're switching away from
-      if (animationsEnabled && branchSwitchAnimation !== 'none') {
-        animationIdCounter.current += 1;
-        setBranchAnimation({ active: true, direction: 'next', parentId: node.parent_id, oldSiblingId: nodeId, id: animationIdCounter.current });
-      }
-    }
-    
-    // Get the original speaker info to determine if user or bot
-    const speaker = currentSpeakers.get(node.speaker_id);
-    const isUser = speaker?.is_user ?? false;
-    
-    // Create new sibling message with random demo content (persisted to server)
-    const newContent = `[Branch] ${pickRandomMessage(isUser)}`;
-    await addMessageRef.current({
-      parentId: node.parent_id,
-      content: newContent,
-      speakerId: node.speaker_id,
-      isBot: node.is_bot,
-      createdAt: Date.now(),
-      // Let server (or our wrapper) choose id
-    });
-    
-    // Note: The new message becomes the tail automatically via optimistic update
-  }, [animationsEnabled, branchSwitchAnimation, getChatSnapshot]);
-
   const handleRegenerate = useCallback((nodeId: string) => {
     // Will trigger AI regeneration
     console.log('Regenerate:', nodeId);
   }, []);
 
-  // STABLE callback - no dependencies that change on mutations
-  // Access nodes via ref to avoid recreating on every mutation
-  const handleSwitchBranch = useCallback((nodeId: string, direction: 'prev' | 'next') => {
-    const chat = getChatSnapshot();
-    if (!chat) return;
-    const currentNodes = new Map(chat.nodes.map(n => [n.id, n]));
-    
-    const node = currentNodes.get(nodeId);
-    if (!node?.parent_id) return;
-
-    const parent = currentNodes.get(node.parent_id);
-    if (!parent) return;
-
-    const currentIndex = parent.child_ids.indexOf(nodeId);
-    const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
-    
-    if (newIndex < 0 || newIndex >= parent.child_ids.length) return;
-
-    // Capture the BRANCHED element's position BEFORE switching
-    // We anchor on the current sibling that's being switched away from
-    const container = containerRef.current;
-    const branchedElement = container?.querySelector(`[data-node-id="${nodeId}"]`) as HTMLElement | null;
-    
-    if (branchedElement && container) {
-      const containerRect = container.getBoundingClientRect();
-      const elementRect = branchedElement.getBoundingClientRect();
-      // Store the parent ID (to find the new sibling after switch) and position
-      // We capture both the offset within container AND the absolute viewport position
-      pendingScrollAnchor.current = {
-        parentId: node.parent_id,
-        offsetFromTop: elementRect.top - containerRect.top,
-        viewportTop: elementRect.top,  // Absolute position on screen
-        direction,
-      };
-      // Prevent auto-scroll from interfering
-      skipAutoScrollRef.current = true;
-      
-      // Trigger animation if enabled - nodeId is the sibling we're switching away from
-      if (animationsEnabled && branchSwitchAnimation !== 'none') {
-        animationIdCounter.current += 1;
-        setBranchAnimation({ active: true, direction, parentId: node.parent_id, oldSiblingId: nodeId, id: animationIdCounter.current });
-      }
-    }
-
-    const targetSiblingId = parent.child_ids[newIndex];
-    
-    // Find the leaf of the target sibling's branch by following active_child_index
-    let leafId = targetSiblingId;
-    let current = currentNodes.get(leafId);
-    
-    while (current && current.child_ids.length > 0) {
-      const nextIndex = current.active_child_index ?? 0;
-      leafId = current.child_ids[nextIndex];
-      current = currentNodes.get(leafId);
-    }
-
-    // Persist to server - optimistic update handles immediate UI
-    void switchBranchRef.current(leafId);
-  }, [animationsEnabled, branchSwitchAnimation, getChatSnapshot]); // Stable - uses refs
-
-  // Restore scroll position after branch switch (runs synchronously after DOM update)
-  useLayoutEffect(() => {
-    const anchor = pendingScrollAnchor.current;
-    const container = containerRef.current;
-    
-    if (!anchor || !container) return;
-    
-    // Clear anchor to prevent re-triggering (but leave skipAutoScrollRef for useEffect to handle)
-    pendingScrollAnchor.current = null;
-    
-    // Find the NEW sibling in the path (the child of parentId that's now active)
-    // Look through the rendered path to find which node has parentId as its parent
-    const parentIndex = activeNodeIds.findIndex(id => id === anchor.parentId);
-    if (parentIndex === -1 || parentIndex >= activeNodeIds.length - 1) return;
-    
-    // The new sibling is the node right after the parent in the path
-    const newSiblingId = activeNodeIds[parentIndex + 1];
-    const anchorElement = container.querySelector(`[data-node-id="${newSiblingId}"]`) as HTMLElement | null;
-    if (!anchorElement) return;
-    
-    const containerRect = container.getBoundingClientRect();
-    const elementRect = anchorElement.getBoundingClientRect();
-    const currentOffsetFromTop = elementRect.top - containerRect.top;
-    
-    // Calculate scroll adjustment to restore original position
-    const scrollDelta = currentOffsetFromTop - anchor.offsetFromTop;
-    const targetScrollTop = container.scrollTop + scrollDelta;
-    
-    // Check if we can actually scroll to this position
-    const maxScrollTop = container.scrollHeight - container.clientHeight;
-    const minScrollTop = 0;
-    
-    if (targetScrollTop >= minScrollTop && targetScrollTop <= maxScrollTop) {
-      // We can maintain the position - instant snap (no animation needed)
-      // Temporarily disable smooth scroll to ensure instant positioning
-      const prevScrollBehavior = container.style.scrollBehavior;
-      container.style.scrollBehavior = 'auto';
-      container.scrollTop = targetScrollTop;
-      container.style.scrollBehavior = prevScrollBehavior;
-    } else {
-      // Not enough content to maintain position
-      // Use CSS transform to create the illusion of smooth movement
-      
-      // First, scroll to the closest valid position (disable smooth scroll for instant positioning)
-      const clampedScrollTop = Math.max(minScrollTop, Math.min(maxScrollTop, targetScrollTop));
-      const prevScrollBehavior = container.style.scrollBehavior;
-      container.style.scrollBehavior = 'auto';
-      container.scrollTop = clampedScrollTop;
-      container.style.scrollBehavior = prevScrollBehavior;
-      
-      // Calculate how much we're "off" from the desired position
-      const overshoot = targetScrollTop - clampedScrollTop;
-      
-      if (Math.abs(overshoot) > 1) {
-        // Apply a transform to offset all messages, making element appear at original position
-        // Need to force reflow between setting initial state and starting animation
-        container.style.transition = 'none';
-        container.style.transform = `translateY(${-overshoot}px)`;
-        
-        // Force reflow to ensure transform is applied before animation starts
-        void container.offsetHeight;
-        
-        // Now animate back to natural position
-        container.style.transition = 'transform 300ms ease-out';
-        container.style.transform = 'translateY(0)';
-        
-        // Clean up after animation
-        const cleanup = () => {
-          container.style.transition = '';
-          container.style.transform = '';
-          container.removeEventListener('transitionend', cleanup);
-        };
-        container.addEventListener('transitionend', cleanup);
-        
-        // Fallback cleanup in case transitionend doesn't fire
-        setTimeout(cleanup, 350);
-      }
-    }
-  }, [activeNodeIds]); // Trigger when path changes
-
-  // Clear the "skip" flag after branch-switch scroll restoration has run.
-  // We keep it alive through the paint so ResizeObserver-based follow won't fight it.
-  useEffect(() => {
-    if (!skipAutoScrollRef.current) return;
-    if (typeof requestAnimationFrame !== 'function') {
-      skipAutoScrollRef.current = false;
-      return;
-    }
-    const id = requestAnimationFrame(() => {
-      skipAutoScrollRef.current = false;
-    });
-    return () => {
-      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id);
-    };
-  }, [activeNodeIds]);
-
-  // Clear animation state after animation completes
-  useEffect(() => {
-    if (branchAnimation?.active) {
-      const timer = setTimeout(() => {
-        setBranchAnimation(null);
-      }, 300); // Match animation duration
-      return () => clearTimeout(timer);
-    }
-  }, [branchAnimation]);
-
-  // Check if a message should be animated (at or after the branch point)
-  const shouldAnimateMessage = useCallback((nodeIndex: number): boolean => {
-    if (!branchAnimation?.active) return false;
-    if (branchSwitchAnimation === 'none') return false;
-    
-    // Only animate if we've actually switched (old sibling is NOT in path anymore)
-    // This prevents animating the old branch before the optimistic update
-    if (activeNodeIds.includes(branchAnimation.oldSiblingId)) return false;
-    
-    // Find the index of the parent in the path
-    const parentIndex = activeNodeIds.indexOf(branchAnimation.parentId);
-    // Animate messages AFTER the parent (the branch point and everything below)
-    return parentIndex !== -1 && nodeIndex > parentIndex;
-  }, [branchAnimation, branchSwitchAnimation, activeNodeIds]);
-  
-  // Get animation class for a message
-  const getAnimationClass = useCallback((nodeIndex: number): string => {
-    if (!shouldAnimateMessage(nodeIndex)) return '';
-    
-    if (branchSwitchAnimation === 'slide') {
-      return branchAnimation!.direction === 'next' 
-        ? 'branch-animate-slide-from-right'
-        : 'branch-animate-slide-from-left';
-    }
-    if (branchSwitchAnimation === 'fade') {
-      return 'branch-animate-fade';
-    }
-    return '';
-  }, [shouldAnimateMessage, branchSwitchAnimation, branchAnimation]);
+  const { branchAnimation, handleSwitchBranch, handleCreateBranch, getAnimationClass } = useMessageListBranchSwitching({
+    containerRef,
+    activeNodeIds,
+    getChatSnapshot,
+    switchBranch: (leafId) => {
+      void switchBranchRef.current(leafId);
+    },
+    addMessage: (params) => addMessageRef.current(params),
+    skipAutoScrollRef,
+    animationsEnabled,
+    branchSwitchAnimation,
+    getNewBranchContent: (isUser) => `[Branch] ${pickRandomMessage(isUser)}`,
+  });
 
   return (
     <div 
@@ -801,13 +413,6 @@ export function MessageList() {
         <div className="message-list-content" ref={contentRef} style={messageListContentStyle}>
           {/* Dynamic markdown styles based on config */}
           <MarkdownStyles />
-          
-          {/* Load more indicator - shown when there are hidden messages */}
-          {visibleNodeIds.hiddenCount > 0 && (
-            <div className="message-list-load-more" onClick={handleLoadMore}>
-              ↑ Load {Math.min(LOAD_MORE_BATCH, visibleNodeIds.hiddenCount)} more messages ({visibleNodeIds.hiddenCount} hidden)
-            </div>
-          )}
           
           {visibleNodeIds.ids.map((nodeId, localIndex) => {
             // Convert local index to global index for animation calculations
