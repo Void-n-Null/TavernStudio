@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { GripVertical, ChevronUp, ChevronDown, Lock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { PromptLayout, PromptBlock, PromptBlockId } from '../../lib/promptLayout';
 import { reorderBlocks, toggleBlock } from '../../lib/promptLayout';
@@ -33,7 +33,6 @@ function getBlockDotColor(id: PromptBlockId): string {
 interface PromptBlockRowProps {
   block: PromptBlock;
   index: number;
-  totalBlocks: number;
   onToggle: (enabled: boolean) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -43,12 +42,13 @@ interface PromptBlockRowProps {
   onDragEnd: () => void;
   onDragOver: () => void;
   isMobile: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }
 
 function PromptBlockRow({
   block,
   index,
-  totalBlocks,
   onToggle,
   onMoveUp,
   onMoveDown,
@@ -58,82 +58,113 @@ function PromptBlockRow({
   onDragEnd,
   onDragOver,
   isMobile,
+  canMoveUp,
+  canMoveDown,
 }: PromptBlockRowProps) {
+  const isLocked = block.locked === true;
+  
   return (
     <div
-      draggable={!isMobile}
+      draggable={!isMobile && !isLocked}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragOver={(e) => {
         e.preventDefault();
-        onDragOver();
+        if (!isLocked) onDragOver();
       }}
       className={cn(
-        'group relative flex items-center gap-2 rounded-md transition-all duration-150',
-        'hover:bg-zinc-800/40',
-        isDragging && 'opacity-40 scale-[0.98]',
-        isDropTarget && 'ring-1 ring-violet-500/50 bg-violet-500/5',
-        !block.enabled && 'opacity-50'
+        'group relative flex items-center gap-2 px-2 py-1.5 transition-all duration-200',
+        // Hover state with subtle lift effect
+        !isLocked && 'hover:bg-zinc-800/50 hover:translate-x-0.5',
+        // Dragging state
+        isDragging && 'opacity-40 scale-[0.98] bg-violet-500/10',
+        // Drop target highlight
+        isDropTarget && !isLocked && 'ring-2 ring-violet-500/60 bg-violet-500/10 rounded-md',
+        // Disabled state
+        !block.enabled && 'opacity-40',
+        // Locked blocks have different styling
+        isLocked && 'bg-zinc-800/20 border-t border-zinc-700/50'
       )}
     >
-      {/* Checkbox for enable/disable - clean toggle */}
+      {/* Checkbox for enable/disable - with pulse animation on change */}
       <button
         type="button"
         onClick={() => onToggle(!block.enabled)}
         className={cn(
-          'w-4 h-4 rounded border-2 transition-all shrink-0 ml-1',
+          'w-4 h-4 rounded border-2 transition-all duration-200 shrink-0',
+          'hover:scale-110 active:scale-95',
           block.enabled
-            ? 'bg-violet-600 border-violet-600'
-            : 'bg-transparent border-zinc-600 hover:border-zinc-500'
+            ? 'bg-violet-600 border-violet-600 shadow-sm shadow-violet-500/30'
+            : 'bg-transparent border-zinc-600 hover:border-zinc-400'
         )}
         title={block.enabled ? 'Enabled (click to disable)' : 'Disabled (click to enable)'}
         aria-label={block.enabled ? 'Disable block' : 'Enable block'}
       >
         {block.enabled && (
           <svg className="w-full h-full text-white" viewBox="0 0 16 16" fill="none">
-            <path d="M4 8l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 8l3 3 5-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </button>
 
-      {/* Drag handle - appears on hover for desktop */}
+      {/* Drag handle or lock icon */}
       {!isMobile && (
         <div className={cn(
-          'cursor-grab active:cursor-grabbing text-zinc-600 shrink-0 transition-opacity',
-          'opacity-0 group-hover:opacity-100'
+          'shrink-0 transition-all duration-200 w-4',
+          isLocked 
+            ? 'text-zinc-600' 
+            : 'cursor-grab active:cursor-grabbing text-zinc-700 opacity-0 group-hover:opacity-100 group-hover:text-zinc-400'
         )}>
-          <GripVertical className="h-4 w-4" />
+          {isLocked ? (
+            <Lock className="h-3 w-3" />
+          ) : (
+            <GripVertical className="h-4 w-4" />
+          )}
         </div>
       )}
 
-      {/* Color indicator dot */}
+      {/* Color indicator dot with glow when enabled */}
       <span className={cn(
-        'w-2 h-2 rounded-full shrink-0',
+        'w-2 h-2 rounded-full shrink-0 transition-all duration-300',
         getBlockDotColor(block.id),
-        !block.enabled && 'opacity-40'
+        block.enabled && 'shadow-sm',
+        block.enabled && block.id.includes('system') && 'shadow-violet-500/50',
+        block.enabled && block.id.includes('char') && 'shadow-emerald-500/50',
+        block.enabled && block.id.includes('persona') && 'shadow-sky-500/50',
+        block.enabled && block.id.includes('world') && 'shadow-amber-500/50',
+        !block.enabled && 'opacity-30'
       )} />
 
-      {/* Block label - the main content */}
+      {/* Block label */}
       <span className={cn(
-        'flex-1 text-sm py-1.5 select-none',
-        block.enabled ? 'text-zinc-200' : 'text-zinc-500'
+        'flex-1 text-sm select-none transition-colors duration-200',
+        block.enabled ? 'text-zinc-200' : 'text-zinc-500',
+        isLocked && 'text-zinc-400 italic'
       )}>
         {block.label}
+        {isLocked && <span className="text-[10px] text-zinc-600 ml-1.5">(fixed)</span>}
       </span>
 
-      {/* Position number - subtle indicator */}
-      <span className="text-[10px] text-zinc-600 tabular-nums w-4 text-right shrink-0">
+      {/* Position number */}
+      <span className={cn(
+        'text-[10px] tabular-nums w-5 text-right shrink-0 transition-colors',
+        isDropTarget ? 'text-violet-400' : 'text-zinc-600'
+      )}>
         {index + 1}
       </span>
 
-      {/* Mobile-only: arrow buttons for reordering */}
-      {isMobile && (
-        <div className="flex flex-col shrink-0">
+      {/* Mobile: arrow buttons (hidden for locked blocks) */}
+      {isMobile && !isLocked && (
+        <div className="flex flex-col shrink-0 -my-1">
           <button
             type="button"
             onClick={onMoveUp}
-            disabled={index === 0}
-            className="p-1 text-zinc-500 disabled:opacity-30 disabled:cursor-not-allowed active:text-zinc-300"
+            disabled={!canMoveUp}
+            className={cn(
+              'p-1 transition-all duration-150',
+              'disabled:opacity-20 disabled:cursor-not-allowed',
+              'text-zinc-500 hover:text-zinc-300 active:scale-90'
+            )}
             aria-label="Move up"
           >
             <ChevronUp className="h-4 w-4" />
@@ -141,13 +172,22 @@ function PromptBlockRow({
           <button
             type="button"
             onClick={onMoveDown}
-            disabled={index === totalBlocks - 1}
-            className="p-1 text-zinc-500 disabled:opacity-30 disabled:cursor-not-allowed active:text-zinc-300"
+            disabled={!canMoveDown}
+            className={cn(
+              'p-1 transition-all duration-150',
+              'disabled:opacity-20 disabled:cursor-not-allowed',
+              'text-zinc-500 hover:text-zinc-300 active:scale-90'
+            )}
             aria-label="Move down"
           >
             <ChevronDown className="h-4 w-4" />
           </button>
         </div>
+      )}
+      
+      {/* Mobile: show lock for locked blocks */}
+      {isMobile && isLocked && (
+        <Lock className="h-3 w-3 text-zinc-600 shrink-0" />
       )}
     </div>
   );
@@ -223,24 +263,31 @@ export function PromptLayoutEditor({ layout, onChange, isMobile = false }: Promp
       </div>
 
       {/* Block list */}
-      <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/30 divide-y divide-zinc-800/40">
-        {layout.blocks.map((block, index) => (
-          <PromptBlockRow
-            key={block.id}
-            block={block}
-            index={index}
-            totalBlocks={layout.blocks.length}
-            onToggle={(enabled) => handleToggle(block.id, enabled)}
-            onMoveUp={() => handleMoveUp(index)}
-            onMoveDown={() => handleMoveDown(index)}
-            isDragging={dragIndex === index}
-            isDropTarget={dropTargetIndex === index}
-            onDragStart={() => handleDragStart(index)}
-            onDragEnd={handleDragEnd}
-            onDragOver={() => handleDragOver(index)}
-            isMobile={isMobile}
-          />
-        ))}
+      <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 overflow-hidden">
+        {layout.blocks.map((block, index) => {
+          // Calculate if this block can move up/down (respecting locked blocks)
+          const canMoveUp = index > 0 && !block.locked && !layout.blocks[index - 1]?.locked;
+          const canMoveDown = index < layout.blocks.length - 1 && !block.locked && !layout.blocks[index + 1]?.locked;
+          
+          return (
+            <PromptBlockRow
+              key={block.id}
+              block={block}
+              index={index}
+              onToggle={(enabled) => handleToggle(block.id, enabled)}
+              onMoveUp={() => handleMoveUp(index)}
+              onMoveDown={() => handleMoveDown(index)}
+              isDragging={dragIndex === index}
+              isDropTarget={dropTargetIndex === index}
+              onDragStart={() => handleDragStart(index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={() => handleDragOver(index)}
+              isMobile={isMobile}
+              canMoveUp={canMoveUp}
+              canMoveDown={canMoveDown}
+            />
+          );
+        })}
       </div>
 
       {/* Minimal footer hint */}

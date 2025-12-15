@@ -43,6 +43,11 @@ export interface PromptBlock {
    * If undefined, uses the default content from presets.
    */
   customContent?: string;
+  /**
+   * If true, this block cannot be reordered. It stays in its position.
+   * Used for blocks like 'prefill' that MUST be last.
+   */
+  locked?: boolean;
 }
 
 /** Complete layout configuration */
@@ -131,6 +136,7 @@ export const DEFAULT_PROMPT_BLOCKS: PromptBlock[] = [
     description: 'Text the assistant "starts" with (e.g., {{char}}:)',
     enabled: true,
     isMarker: true,
+    locked: true, // Must always be last - it's the assistant's starting text
   },
 ];
 
@@ -149,6 +155,7 @@ export function getBlockInfo(id: PromptBlockId): PromptBlock | undefined {
 
 /** 
  * Reorder blocks in a layout.
+ * Respects locked blocks - they cannot be moved.
  * @param layout Current layout
  * @param fromIndex Index to move from
  * @param toIndex Index to move to
@@ -160,6 +167,13 @@ export function reorderBlocks(
   toIndex: number
 ): PromptLayout {
   const blocks = [...layout.blocks];
+  
+  // Don't allow moving locked blocks
+  if (blocks[fromIndex]?.locked) return layout;
+  
+  // Don't allow moving INTO a locked block's position
+  if (blocks[toIndex]?.locked) return layout;
+  
   const [removed] = blocks.splice(fromIndex, 1);
   blocks.splice(toIndex, 0, removed);
   return { ...layout, blocks };
