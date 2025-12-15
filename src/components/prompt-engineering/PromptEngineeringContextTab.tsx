@@ -126,6 +126,7 @@ export function PromptEngineeringContextTab({
           <PromptLayoutEditor
             layout={layout}
             onChange={(newLayout) => onChange({ ...preset, promptLayout: newLayout })}
+            isMobile={isMobile}
           />
         </div>
       ) : (
