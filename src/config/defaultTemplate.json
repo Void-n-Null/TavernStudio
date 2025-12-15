@@ -145,5 +145,29 @@
     "opacity": 10,
     "blur": 6
   },
+  "composer": {
+    "backgroundColor": "#09090b",
+    "backgroundOpacity": 45,
+    "backgroundOpacityFocused": 60,
+    "borderColor": "#ffffff",
+    "borderOpacity": 10,
+    "borderOpacityFocused": 15,
+    "borderWidthPx": 1,
+    "radiusPx": 16,
+    "backdropBlurPx": 12,
+    "shadowEnabled": true,
+    "shadowCss": "0 -10px 30px rgba(0,0,0,0.35)",
+    "sendButtonType": "label",
+    "sendButtonBackgroundColor": "#ffffff",
+    "sendButtonBackgroundOpacity": 12,
+    "sendButtonBackgroundOpacityDisabled": 8,
+    "sendButtonTextColor": "#ffffff",
+    "sendButtonTextOpacityDisabled": 70,
+    "sendButtonBorderColor": "#ffffff",
+    "sendButtonBorderOpacity": 12,
+    "sendButtonBorderOpacityDisabled": 8,
+    "sendButtonBorderWidthPx": 0,
+    "sendButtonRadiusPx": 10
+  },
   "speakerOverrides": {}
 }

@@ -2,8 +2,16 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type ForgeMode = 'view' | 'edit' | 'create';
-export type SortField = 'name' | 'updated_at' | 'created_at';
+export type SortField = 'name' | 'updated_at' | 'created_at' | 'token_count';
 export type ViewMode = 'grid' | 'list';
+
+export type TokenFilterBucket =
+  | 'any'
+  | 'unknown'
+  | 'lt_1k'
+  | '1k_2k'
+  | '2k_4k'
+  | 'gte_4k';
 
 interface CharacterForgeState {
   // Selection
@@ -13,6 +21,7 @@ interface CharacterForgeState {
   // Filtering & Search
   searchQuery: string;
   filterTags: string[];
+  tokenFilter: TokenFilterBucket;
   sortBy: SortField;
   sortDirection: 'asc' | 'desc';
   viewMode: ViewMode;
@@ -26,6 +35,7 @@ interface CharacterForgeState {
   setMode: (mode: ForgeMode) => void;
   setSearchQuery: (query: string) => void;
   toggleTag: (tag: string) => void;
+  setTokenFilter: (bucket: TokenFilterBucket) => void;
   clearFilters: () => void;
   setSortBy: (field: SortField) => void;
   toggleSortDirection: () => void;
@@ -50,6 +60,7 @@ export const useCharacterForgeStore = create<CharacterForgeState>()(
       mode: 'view',
       searchQuery: '',
       filterTags: [],
+      tokenFilter: 'any',
       sortBy: 'updated_at',
       sortDirection: 'desc',
       viewMode: 'grid',
@@ -62,13 +73,19 @@ export const useCharacterForgeStore = create<CharacterForgeState>()(
       setSearchQuery: (searchQuery) => set({ searchQuery }),
 
       toggleTag: (tag) =>
-        set((state) => ({
-          filterTags: state.filterTags.includes(tag)
-            ? state.filterTags.filter((t) => t !== tag)
-            : [...state.filterTags, tag],
-        })),
+        set((state) => {
+          const key = String(tag || '').trim().toLowerCase();
+          if (!key) return state;
+          return {
+            filterTags: state.filterTags.includes(key)
+              ? state.filterTags.filter((t) => t !== key)
+              : [...state.filterTags, key],
+          };
+        }),
 
-      clearFilters: () => set({ searchQuery: '', filterTags: [] }),
+      setTokenFilter: (tokenFilter) => set({ tokenFilter }),
+
+      clearFilters: () => set({ searchQuery: '', filterTags: [], tokenFilter: 'any' }),
       setSortBy: (sortBy) => set({ sortBy }),
       toggleSortDirection: () =>
         set((state) => ({

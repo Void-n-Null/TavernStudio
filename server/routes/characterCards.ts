@@ -67,6 +67,33 @@ function extractCreator(card: unknown): string | undefined {
   return undefined;
 }
 
+function extractTags(card: unknown): string[] | undefined {
+  if (!card || typeof card !== 'object') return undefined;
+  const obj = card as Record<string, unknown>;
+
+  const readTags = (v: unknown): string[] | undefined => {
+    if (!Array.isArray(v)) return undefined;
+    const out = v
+      .filter((x) => typeof x === 'string')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return out.length > 0 ? Array.from(new Set(out)) : undefined;
+  };
+
+  // V2: data.tags
+  const data = obj.data;
+  if (data && typeof data === 'object') {
+    const tags = readTags((data as Record<string, unknown>).tags);
+    if (tags) return tags;
+  }
+
+  // Some cards might keep legacy top-level tags
+  const tags = readTags(obj.tags);
+  if (tags) return tags;
+
+  return undefined;
+}
+
 function rowToMeta(row: CharacterCardRow): CharacterCardRecordMeta {
   return {
     id: row.id,
@@ -101,30 +128,32 @@ characterCardRoutes.get('/', (c) => {
   `).all() as CharacterCardRow[];
 
   const needsCreatorBackfill = rows.some((r) => r.creator == null);
-  if (!needsCreatorBackfill) return c.json(rows.map(rowToMeta));
-
-  const updateCreator = prepare('UPDATE character_cards SET creator = ? WHERE id = ?');
+  const updateCreator = needsCreatorBackfill ? prepare('UPDATE character_cards SET creator = ? WHERE id = ?') : null;
 
   const out: CharacterCardRecordMeta[] = [];
   for (const row of rows) {
-    let creator = row.creator ?? undefined;
-
-    if (creator == null) {
-      try {
-        const parsed = JSON.parse(row.raw_json);
-        creator = extractCreator(parsed);
-        if (creator != null) updateCreator.run(creator, row.id);
-      } catch {
-        // ignore bad JSON; keep values empty
-      }
+    let parsed: unknown | null = null;
+    try {
+      parsed = JSON.parse(row.raw_json);
+    } catch {
+      parsed = null;
     }
 
-    out.push(
-      rowToMeta({
+    let creator = row.creator ?? undefined;
+    if (creator == null && parsed) {
+      creator = extractCreator(parsed);
+      if (creator != null && updateCreator) updateCreator.run(creator, row.id);
+    }
+
+    const tags = parsed ? extractTags(parsed) : undefined;
+
+    out.push({
+      ...rowToMeta({
         ...row,
         creator: creator ?? row.creator ?? null,
-      })
-    );
+      }),
+      tags,
+    });
   }
 
   return c.json(out);

@@ -2,4 +2,5 @@
 export * from './chats';
 export * from './useSpeakers';
 export * from './useSettings';
+export * from './usePromptEngineering';
 export * from './profiles';

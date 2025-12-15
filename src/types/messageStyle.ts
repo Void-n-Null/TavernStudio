@@ -240,6 +240,34 @@ export interface CustomCssConfig {
   css: string;
 }
 
+export type ComposerSendButtonType = 'label' | 'icon' | 'hidden';
+
+ export interface ComposerConfig {
+  backgroundColor: string;
+  backgroundOpacity: number;
+  backgroundOpacityFocused: number;
+  borderColor: string;
+  borderOpacity: number;
+  borderOpacityFocused: number;
+  borderWidthPx: number;
+  radiusPx: number;
+  backdropBlurPx: number;
+  shadowEnabled: boolean;
+  shadowCss: string;
+  sendButtonType: ComposerSendButtonType;
+
+  sendButtonBackgroundColor: string;
+  sendButtonBackgroundOpacity: number;
+  sendButtonBackgroundOpacityDisabled: number;
+  sendButtonTextColor: string;
+  sendButtonTextOpacityDisabled: number;
+  sendButtonBorderColor: string;
+  sendButtonBorderOpacity: number;
+  sendButtonBorderOpacityDisabled: number;
+  sendButtonBorderWidthPx: number;
+  sendButtonRadiusPx: number;
+ }
+
 // ============ Full Config ============
 export interface MessageStyleConfig {
   typography: TypographyConfig;
@@ -255,6 +283,7 @@ export interface MessageStyleConfig {
   customCss: CustomCssConfig;
   pageBackground: PageBackgroundConfig;
   messageListBackground: MessageListBackgroundConfig;
+  composer: ComposerConfig;
   speakerOverrides: Record<string, Partial<MessageStyleConfig>>;
 }
 
@@ -277,6 +306,7 @@ export const defaultMarkdown = defaultMessageStyleConfig.markdown;
 export const defaultCustomCss = defaultMessageStyleConfig.customCss;
 export const defaultPageBackground = defaultMessageStyleConfig.pageBackground;
 export const defaultMessageListBackground = defaultMessageStyleConfig.messageListBackground;
+ export const defaultComposer = defaultMessageStyleConfig.composer;
 
 /**
  * Best-effort defaults merger for backwards compatibility with older stored profiles.
@@ -300,6 +330,7 @@ export function applyMessageStyleDefaults(partial: Partial<MessageStyleConfig> |
     customCss: { ...defaultMessageStyleConfig.customCss, ...(p as any).customCss },
     pageBackground: { ...defaultMessageStyleConfig.pageBackground, ...(p as any).pageBackground },
     messageListBackground: { ...defaultMessageStyleConfig.messageListBackground, ...(p as any).messageListBackground },
+    composer: { ...defaultMessageStyleConfig.composer, ...(p as any).composer },
     speakerOverrides: (p as any).speakerOverrides ?? defaultMessageStyleConfig.speakerOverrides,
   };
 }

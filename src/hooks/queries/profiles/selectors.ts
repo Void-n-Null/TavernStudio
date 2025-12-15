@@ -16,6 +16,7 @@ import type {
   CustomCssConfig,
   PageBackgroundConfig,
   MessageListBackgroundConfig,
+  ComposerConfig,
 } from '../../../types/messageStyle';
 import {
   defaultTypography,
@@ -31,6 +32,7 @@ import {
   defaultCustomCss,
   defaultPageBackground,
   defaultMessageListBackground,
+  defaultComposer,
   defaultMessageStyleConfig,
   applyMessageStyleDefaults,
 } from '../../../types/messageStyle';
@@ -167,6 +169,16 @@ export function useMessageListBackgroundConfig(): MessageListBackgroundConfig {
     select: (profile) => applyMessageStyleDefaults(profile?.messageStyle).messageListBackground,
   });
   return data ?? defaultMessageListBackground;
+}
+
+/** Composer (chat input) config with defaults */
+export function useComposerConfig(): ComposerConfig {
+  const { data } = useQuery({
+    queryKey: queryKeys.profiles.active(),
+    queryFn: () => profiles.getActive(),
+    select: (profile) => applyMessageStyleDefaults(profile?.messageStyle).composer,
+  });
+  return data ?? defaultComposer;
 }
 
 /** Full message style config with defaults */

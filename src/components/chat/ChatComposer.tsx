@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Plus, CornerDownLeft } from 'lucide-react';
+import { Send, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { showToast } from '../ui/toast';
 import { useServerChat } from '../../hooks/queries';
-import { useLayoutConfig } from '../../hooks/queries/useProfiles';
+import { useComposerConfig, useLayoutConfig } from '../../hooks/queries/useProfiles';
 import { useChatComposerDraft, useChatComposerStore } from '../../store/chatComposerStore';
 
 export function ChatComposer() {
   const layout = useLayoutConfig();
+  const composer = useComposerConfig();
   const { tailId, speakers, nodes, addMessage, isAddingMessage } = useServerChat();
 
   const draft = useChatComposerDraft();
@@ -109,19 +110,74 @@ export function ChatComposer() {
     };
   }, [isMobile, layout.containerWidth]);
 
+  const applyOpacityToColor = useCallback((color: string | undefined, opacity: number): string => {
+    if (!color) return `rgba(0, 0, 0, ${opacity})`;
+    if (color.startsWith('rgba')) {
+      return color.replace(/[\d.]+\)$/, `${opacity})`);
+    }
+    if (color.startsWith('rgb(')) {
+      return color.replace('rgb(', 'rgba(').replace(')', `, ${opacity})`);
+    }
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16);
+      const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16);
+      const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+    return color;
+  }, []);
+
+  const surfaceStyle = useMemo(() => {
+    const bgOpacity = (isFocused ? composer.backgroundOpacityFocused : composer.backgroundOpacity) / 100;
+    const borderOpacity = (isFocused ? composer.borderOpacityFocused : composer.borderOpacity) / 100;
+
+    const style: React.CSSProperties = {
+      borderWidth: `${composer.borderWidthPx}px`,
+      borderColor: applyOpacityToColor(composer.borderColor, borderOpacity),
+      backgroundColor: applyOpacityToColor(composer.backgroundColor, bgOpacity),
+      borderRadius: `${composer.radiusPx}px`,
+      boxShadow: composer.shadowEnabled ? composer.shadowCss : 'none',
+    };
+
+    if (composer.backdropBlurPx > 0) {
+      style.backdropFilter = `blur(${composer.backdropBlurPx}px)`;
+      (style as any).WebkitBackdropFilter = `blur(${composer.backdropBlurPx}px)`;
+    }
+
+    return style;
+  }, [applyOpacityToColor, composer, isFocused]);
+
+  const sendButtonStyle = useMemo(() => {
+    const disabled = isAddingMessage || isEmpty;
+
+    const bgOpacity = (disabled ? composer.sendButtonBackgroundOpacityDisabled : composer.sendButtonBackgroundOpacity) / 100;
+    const borderOpacity = (disabled ? composer.sendButtonBorderOpacityDisabled : composer.sendButtonBorderOpacity) / 100;
+    const textOpacity = (disabled ? composer.sendButtonTextOpacityDisabled : 100) / 100;
+
+    return {
+      backgroundColor: applyOpacityToColor(composer.sendButtonBackgroundColor, bgOpacity),
+      borderColor: applyOpacityToColor(composer.sendButtonBorderColor, borderOpacity),
+      borderWidth: `${composer.sendButtonBorderWidthPx}px`,
+      borderStyle: composer.sendButtonBorderWidthPx > 0 ? 'solid' : 'none',
+      borderRadius: `${composer.sendButtonRadiusPx}px`,
+      color: applyOpacityToColor(composer.sendButtonTextColor, textOpacity),
+    } satisfies React.CSSProperties;
+  }, [applyOpacityToColor, composer, isAddingMessage, isEmpty]);
+
   return (
-    <div className="w-full shrink-0 px-2 pb-3 pt-0" aria-label="Chat composer">
+    <div className="chat-composer w-full shrink-0 px-2 pb-3 pt-0" aria-label="Chat composer">
       <div style={containerWidthStyle}>
         <div
           className={cn(
-            'rounded-2xl border border-white/10 bg-zinc-950/45 backdrop-blur-md',
-            'shadow-[0_-10px_30px_rgba(0,0,0,0.35)]',
+            'chat-composer-surface border',
             'transition-all duration-150',
-            isFocused ? 'bg-zinc-950/60 border-white/15' : 'hover:border-white/15'
+            isFocused ? 'chat-composer-focused' : undefined
           )}
+          style={surfaceStyle}
         >
           <form
-            className={cn('flex items-end gap-2 p-2', !isFocused && isEmpty ? 'items-center' : 'items-end')}
+            className={cn('chat-composer-form flex items-end gap-2 p-2', !isFocused && isEmpty ? 'items-center' : 'items-end')}
             onSubmit={(e) => {
               e.preventDefault();
               void send();
@@ -131,7 +187,7 @@ export function ChatComposer() {
               type="button"
               variant="ghost"
               size="icon"
-              className={cn('shrink-0', isFocused ? 'text-zinc-200' : 'text-zinc-400')}
+              className={cn('chat-composer-attach shrink-0', isFocused ? 'text-zinc-200' : 'text-zinc-400')}
               onClick={() => showToast({ message: 'Attachments not wired yet.', type: 'info' })}
               aria-label="Add"
             >
@@ -228,6 +284,9 @@ export function ChatComposer() {
                   }
 
                   if (e.key === 'Enter' && !e.shiftKey) {
+                    if (isMobile && composer.sendButtonType !== 'hidden') {
+                      return;
+                    }
                     e.preventDefault();
                     void send();
                   }
@@ -238,7 +297,7 @@ export function ChatComposer() {
                 }}
                 rows={1}
                 className={cn(
-                  'w-full resize-none bg-transparent px-2 py-2 text-sm text-zinc-100 outline-none',
+                  'chat-composer-textarea w-full resize-none bg-transparent px-2 py-2 text-sm text-zinc-100 outline-none',
                   'placeholder:text-zinc-500',
                   'leading-6',
                   isFocused || !isEmpty ? 'min-h-[44px]' : 'h-[44px] overflow-hidden'
@@ -246,35 +305,21 @@ export function ChatComposer() {
                 style={{ maxHeight: 240 }}
                 aria-label="Message input"
               />
-
-              <div
-                className={cn(
-                  ' text-[11px] text-zinc-500 transition-all duration-150',
-                  isFocused || !isEmpty ? 'h-5 opacity-100 px-2 pb-1' : 'h-0 opacity-0 overflow-hidden'
-                )}
-              >
-                <span className="inline-flex items-center gap-1">
-                  <CornerDownLeft className="h-3 w-3" />
-                  Enter to send
-                </span>
-                <span className="mx-2 text-zinc-700">|</span>
-                <span>Shift+Enter for newline</span>
-                <span className="mx-2 text-zinc-700">|</span>
-                <span className={cn(value.length > 4000 ? 'text-amber-400' : undefined)}>{value.length} chars</span>
-              </div>
             </div>
 
-            <Button
-              type="submit"
-              variant={isEmpty ? 'secondary' : 'default'}
-              size={isFocused || !isEmpty ? 'default' : 'icon'}
-              className={cn('shrink-0', isEmpty ? 'opacity-70' : undefined)}
-              disabled={isAddingMessage || isEmpty}
-              aria-label="Send"
-            >
-              <Send className="h-4 w-4" />
-              {isFocused || !isEmpty ? <span>Send</span> : null}
-            </Button>
+            {composer.sendButtonType === 'hidden' ? null : (
+              <Button
+                type="submit"
+                variant={isEmpty ? 'secondary' : 'default'}
+                size={composer.sendButtonType === 'icon' ? 'icon' : 'default'}
+                className={cn('chat-composer-send shrink-0', isEmpty ? 'opacity-70' : undefined)}
+                disabled={isAddingMessage || isEmpty}
+                aria-label="Send"
+                style={sendButtonStyle}
+              >
+                {composer.sendButtonType === 'icon' ? <Send className="h-4 w-4" /> : <span>Send</span>}
+              </Button>
+            )}
           </form>
         </div>
       </div>

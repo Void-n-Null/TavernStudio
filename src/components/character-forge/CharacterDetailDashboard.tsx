@@ -124,7 +124,6 @@ export function CharacterDetailDashboard({
             <div>
               <div
                 className="text-xl font-bold text-zinc-100"
-                style={{ fontFamily: '"Instrument Serif", Georgia, serif' }}
               >
                 {data.name}
               </div>

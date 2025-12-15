@@ -3,7 +3,7 @@
  */
 
 import { useRef } from 'react';
-import { Search, Grid3X3, List, SortAsc, SortDesc, Plus, X } from 'lucide-react';
+import { Search, Grid3X3, List, SortAsc, SortDesc, Plus, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useCharacterForgeStore } from '../../store/characterForgeStore';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
@@ -26,6 +26,8 @@ export function CharacterGalleryHeader({ onCreateNew }: CharacterGalleryHeaderPr
     toggleSortDirection,
     filterTags,
     clearFilters,
+    isGalleryFullscreen,
+    toggleGalleryFullscreen,
   } = useCharacterForgeStore();
   
   const hasFilters = searchQuery.length > 0 || filterTags.length > 0;
@@ -140,7 +142,19 @@ export function CharacterGalleryHeader({ onCreateNew }: CharacterGalleryHeaderPr
           </button>
         </div>
 
-        {/* Fullscreen gallery toggle */}
+        <button
+          onClick={toggleGalleryFullscreen}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/80 transition-colors',
+            isGalleryFullscreen
+              ? 'text-violet-300 hover:bg-zinc-800'
+              : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+          )}
+          title={isGalleryFullscreen ? 'Exit fullscreen' : 'Fullscreen gallery'}
+          aria-pressed={isGalleryFullscreen}
+        >
+          {isGalleryFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
       </div>
     </div>
   );

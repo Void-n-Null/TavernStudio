@@ -19,8 +19,9 @@ interface CharacterGalleryGridProps {
 
 export function CharacterGalleryGrid({ selectedId, onSelect, onEdit }: CharacterGalleryGridProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const massImportInputRef = useRef<HTMLInputElement>(null);
-  const [isMassImporting, setIsMassImporting] = useState(false);
+  const [isBatchImporting, setIsBatchImporting] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
   
   const { data: cards, isLoading, error } = useCharacterCards();
   const importPng = useImportPngCard();
@@ -76,25 +77,49 @@ export function CharacterGalleryGrid({ selectedId, onSelect, onEdit }: Character
     
     return result;
   }, [cards, searchQuery, filterTags, sortBy, sortDirection]);
-  
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    try {
-      const result = await importPng.mutateAsync(file);
-      showToast({ message: `Imported "${result.name}"`, type: 'success' });
-      onSelect(result.id);
-    } catch (err) {
-      showToast({ 
-        message: err instanceof Error ? err.message : 'Import failed', 
-        type: 'error' 
-      });
+
+  const importFiles = async (files: File[]) => {
+    const pngs = files.filter((f) => f.name.toLowerCase().endsWith('.png'));
+    if (pngs.length === 0) {
+      showToast({ message: 'No PNG files found', type: 'info' });
+      return;
     }
-    
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+
+    setIsBatchImporting(true);
+
+    let imported = 0;
+    let failed = 0;
+    let firstError: string | null = null;
+    let lastImportedId: string | null = null;
+
+    for (const file of pngs) {
+      try {
+        const result = await importPng.mutateAsync(file);
+        imported += 1;
+        lastImportedId = result.id;
+      } catch (err) {
+        failed += 1;
+        if (!firstError) firstError = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    if (imported > 0 && lastImportedId) onSelect(lastImportedId);
+
+    showToast({
+      message: failed > 0 ? `Imported ${imported}, failed ${failed}. ${firstError ?? ''}`.trim() : `Imported ${imported}`,
+      type: failed > 0 ? 'error' : 'success',
+    });
+
+    setIsBatchImporting(false);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    try {
+      await importFiles(files);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -166,58 +191,35 @@ export function CharacterGalleryGrid({ selectedId, onSelect, onEdit }: Character
     };
   }, [cards, updateTokenCount]);
 
-  useEffect(() => {
-    const el = massImportInputRef.current;
-    if (!el) return;
-    (el as any).webkitdirectory = true;
-    (el as any).directory = true;
-  }, []);
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDragOver(true);
+  };
 
-  const handleMassImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = 0;
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files ?? []);
     if (files.length === 0) return;
-
-    setIsMassImporting(true);
-
-    let imported = 0;
-    let failed = 0;
-    let skipped = 0;
-    let firstError: string | null = null;
-
-    for (const file of files) {
-      const lower = file.name.toLowerCase();
-      try {
-        if (lower.endsWith('.png')) {
-          await importPng.mutateAsync(file);
-          imported += 1;
-          continue;
-        }
-
-        if (lower.endsWith('.json')) {
-          const text = await file.text();
-          const json = JSON.parse(text) as Record<string, unknown>;
-          await importJson.mutateAsync(json);
-          imported += 1;
-          continue;
-        }
-
-        skipped += 1;
-      } catch (err) {
-        failed += 1;
-        if (!firstError) firstError = err instanceof Error ? err.message : String(err);
-      }
-    }
-
-    showToast({
-      message:
-        failed > 0
-          ? `Imported ${imported}, failed ${failed}${skipped ? `, skipped ${skipped}` : ''}. ${firstError ?? ''}`.trim()
-          : `Imported ${imported}${skipped ? `, skipped ${skipped}` : ''}`,
-      type: failed > 0 ? 'error' : 'success',
-    });
-
-    setIsMassImporting(false);
-    if (massImportInputRef.current) massImportInputRef.current.value = '';
+    await importFiles(files);
   };
   
   const handleDelete = async (id: string, name: string) => {
@@ -259,40 +261,48 @@ export function CharacterGalleryGrid({ selectedId, onSelect, onEdit }: Character
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-3">
+    <div
+      className="relative flex-1 overflow-y-auto p-3"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Import button at top */}
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3">
         <input
           ref={fileInputRef}
           type="file"
           accept="image/png"
-          onChange={handleImport}
-          className="hidden"
-        />
-        <input
-          ref={massImportInputRef}
-          type="file"
           multiple
-          onChange={handleMassImport}
+          onChange={handleImport}
           className="hidden"
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          disabled={importPng.isPending || isMassImporting}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-400 transition-colors hover:border-zinc-600 hover:bg-zinc-900 hover:text-zinc-300 disabled:opacity-50"
+          disabled={isBatchImporting || importPng.isPending || importJson.isPending}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-400 transition-colors hover:border-zinc-600 hover:bg-zinc-900 hover:text-zinc-300 disabled:opacity-50"
         >
           <Upload className="h-4 w-4" />
-          {importPng.isPending ? 'Importing...' : 'Import PNG'}
+          {isBatchImporting || importPng.isPending ? 'Importing…' : 'Import PNGs'}
         </button>
-        <button
-          onClick={() => massImportInputRef.current?.click()}
-          disabled={isMassImporting || importPng.isPending || importJson.isPending}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-400 transition-colors hover:border-zinc-600 hover:bg-zinc-900 hover:text-zinc-300 disabled:opacity-50"
-        >
-          <Upload className="h-4 w-4" />
-          {isMassImporting ? 'Importing folder...' : 'Mass Import Folder'}
-        </button>
+        <div className="mt-1 flex items-center justify-between text-[11px] text-zinc-600">
+          <span>Tip: select multiple files, or drag/drop a folder</span>
+          <span>
+            {filteredCards.length}
+            {cards ? ` / ${cards.length}` : ''}
+          </span>
+        </div>
       </div>
+
+      {isDragOver && (
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-zinc-950/70">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900/70 px-6 py-4 text-center">
+            <div className="text-sm font-medium text-zinc-200">Drop PNGs to import</div>
+            <div className="mt-1 text-xs text-zinc-400">Multiple files supported</div>
+          </div>
+        </div>
+      )}
       
       {filteredCards.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">

@@ -414,7 +414,6 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
         <div>
           <h2 
             className="text-xl font-bold text-zinc-100"
-            style={{ fontFamily: '"Instrument Serif", Georgia, serif' }}
           >
             <EditorTitle isCreating={isCreating} />
           </h2>

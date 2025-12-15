@@ -75,4 +75,29 @@ export const customCssCheatSheet: CustomCssCheatSheetItem[] = [
     description: 'Divider between messages when enabled.',
     example: '.message-divider { background: rgba(255,255,255,0.15) !important; }',
   },
+  {
+    selector: '.chat-composer',
+    description: 'Outer wrapper for the chat composer (fixed at bottom of the app).',
+    example: '.chat-composer { padding-bottom: 24px; }',
+  },
+  {
+    selector: '.chat-composer-surface',
+    description: 'Main rounded surface behind the input + buttons (background/border/shadow applied here).',
+    example: '.chat-composer-surface { outline: 1px solid rgba(255,255,255,0.08) !important; }',
+  },
+  {
+    selector: '.chat-composer-form',
+    description: 'Flex row containing attachment button, textarea, and send button.',
+    example: '.chat-composer-form { gap: 10px; }',
+  },
+  {
+    selector: '.chat-composer-textarea',
+    description: 'The message input textarea.',
+    example: '.chat-composer-textarea { font-size: 15px; }',
+  },
+  {
+    selector: '.chat-composer-send',
+    description: 'Send button.',
+    example: '.chat-composer-send { border-radius: 9999px; }',
+  },
 ];
