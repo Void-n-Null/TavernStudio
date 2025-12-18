@@ -5,7 +5,6 @@ import { cn } from '../../lib/utils';
 import { MacroHighlightTextarea } from '../character-forge/MacroHighlightTextarea';
 import {
   BoolFieldRow,
-  EducationPanel,
   NumberField,
   PromptSectionTitle,
   createEmptyContext,
@@ -56,15 +55,6 @@ export function PromptEngineeringContextTab({
               subtitle="Drag to reorder • Empty blocks auto-skip"
               hasContent={layout.blocks.some(b => b.enabled)}
             />
-            <EducationPanel title="How does Structure work?">
-              <p>
-                <strong>Prompt Structure</strong> controls the order of information sent to the AI.
-              </p>
-              <p>
-                Modern APIs (OpenAI, Claude) see these blocks as a single stream. 
-                <strong> Empty blocks are automatically skipped.</strong>
-              </p>
-            </EducationPanel>
           </div>
           
           <PromptLayoutEditor
@@ -81,15 +71,6 @@ export function PromptEngineeringContextTab({
               title="Story String (Manual Structure)"
               hasContent={hasContent(context.story_string)}
             />
-            <EducationPanel title="What is a Story String?">
-              <p>
-                In <strong>Text Mode</strong>, the model expects one giant block of text. 
-                The Story String is the "template" for that block.
-              </p>
-              <p>
-                It uses Handlebars-style tags like <code className="text-violet-400 font-mono text-[10px]">{"{{char}}"}</code> to inject character data.
-              </p>
-            </EducationPanel>
           </div>
 
           <MacroHighlightTextarea

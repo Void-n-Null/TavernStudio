@@ -2,7 +2,7 @@ import type { PromptEngineeringPreset } from '../../types/promptEngineering';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { MacroHighlightTextarea } from '../character-forge/MacroHighlightTextarea';
-import { BoolFieldRow, EducationPanel, PromptSectionTitle, createEmptyInstruct } from './promptEngineeringEditorShared';
+import { BoolFieldRow, PromptSectionTitle, createEmptyInstruct } from './promptEngineeringEditorShared';
 
 /** Common instruct format presets with documentation */
 const FORMAT_PRESETS = {
@@ -145,22 +145,6 @@ export function PromptEngineeringInstructTab({
           title="Message Wrapping (Instruct Format)"
           hasContent={hasAnySequences}
         />
-        <EducationPanel title="What is Instruct Format?">
-          <p>
-            <strong>Instruct Format</strong> defines how messages are wrapped when sent to 
-            <em> Text Completion APIs</em> (llama.cpp, KoboldAI, Oobabooga, etc.).
-          </p>
-          <p>
-            Unlike Chat Completion APIs (OpenAI, Claude) which understand message roles natively, 
-            text completion models need explicit markers to know where user/assistant messages begin and end.
-          </p>
-          <p className="text-amber-500/80">
-            ⚠️ <strong>Not needed for Chat Completion APIs</strong> — they handle formatting automatically.
-          </p>
-          <p className="text-zinc-600">
-            If all fields are empty, no wrapping is applied.
-          </p>
-        </EducationPanel>
       </div>
 
       {/* Quick Presets */}
@@ -191,17 +175,6 @@ export function PromptEngineeringInstructTab({
           subtitle="Inserted BEFORE each message type"
           hasContent={hasContent(instruct.system_sequence) || hasContent(instruct.input_sequence) || hasContent(instruct.output_sequence)}
         />
-        <EducationPanel title="What are prefixes?">
-          <p>
-            Prefixes are inserted <em>before</em> each message. They tell the model "here comes a message from [role]".
-          </p>
-          <p>Example for ChatML:</p>
-          <ul className="list-disc list-inside space-y-1 ml-2 font-mono text-[10px]">
-            <li>System: <code className="text-emerald-400">{`<|im_start|>system\n`}</code></li>
-            <li>User: <code className="text-blue-400">{`<|im_start|>user\n`}</code></li>
-            <li>Assistant: <code className="text-violet-400">{`<|im_start|>assistant\n`}</code></li>
-          </ul>
-        </EducationPanel>
         
         <div className="grid gap-3 md:grid-cols-3">
           <MacroHighlightTextarea
@@ -238,15 +211,6 @@ export function PromptEngineeringInstructTab({
           subtitle="Inserted AFTER each message type"
           hasContent={hasContent(instruct.system_suffix) || hasContent(instruct.input_suffix) || hasContent(instruct.output_suffix)}
         />
-        <EducationPanel title="What are suffixes?">
-          <p>
-            Suffixes are inserted <em>after</em> each message. They mark where a message ends.
-          </p>
-          <p>Example for ChatML:</p>
-          <ul className="list-disc list-inside space-y-1 ml-2 font-mono text-[10px]">
-            <li>All roles: <code className="text-zinc-400">{`<|im_end|>\n`}</code></li>
-          </ul>
-        </EducationPanel>
         
         <div className="grid gap-3 md:grid-cols-3">
           <MacroHighlightTextarea
@@ -282,16 +246,6 @@ export function PromptEngineeringInstructTab({
           title="Stop Sequence"
           hasContent={hasContent(instruct.stop_sequence)}
         />
-        <EducationPanel title="What is a stop sequence?">
-          <p>
-            The <strong>stop sequence</strong> tells the model when to stop generating. 
-            When the model outputs this text, generation halts and it's removed from the response.
-          </p>
-          <p>
-            Usually matches the end-of-turn token, like <code className="text-zinc-400">{`<|im_end|>`}</code> for ChatML 
-            or <code className="text-zinc-400">{`</s>`}</code> for Llama.
-          </p>
-        </EducationPanel>
         <MacroHighlightTextarea
           value={instruct.stop_sequence}
           onChange={(v) => updateField('stop_sequence', v)}

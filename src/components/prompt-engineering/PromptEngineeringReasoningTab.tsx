@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import type { PromptEngineeringPreset } from '../../types/promptEngineering';
 import { MacroHighlightTextarea } from '../character-forge/MacroHighlightTextarea';
-import { BoolFieldRow, EducationPanel, PromptSectionTitle, createEmptyOutput } from './promptEngineeringEditorShared';
+import { BoolFieldRow, PromptSectionTitle, createEmptyOutput } from './promptEngineeringEditorShared';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 
@@ -67,21 +67,6 @@ export function PromptEngineeringOutputTab({
           title="Stop Strings"
           hasContent={hasStopStrings}
         />
-        <EducationPanel title="What are stop strings?">
-          <p>
-            <strong>Stop strings</strong> tell the model when to stop generating. 
-            When the model outputs any of these strings, generation halts immediately.
-          </p>
-          <p>Common uses:</p>
-          <ul className="list-disc list-inside space-y-1 ml-2">
-            <li><code className="text-zinc-400">\n</code> — Stop after one line (dialogue)</li>
-            <li><code className="text-zinc-400">\nUser:</code> — Prevent speaking as user</li>
-            <li><code className="text-zinc-400">{'{{char}}:'}</code> — Stop before next character turn</li>
-          </ul>
-          <p className="text-zinc-600 mt-2">
-            The instruct format's stop sequence is always used. These are <em>additional</em> stops.
-          </p>
-        </EducationPanel>
 
         {/* Quick add presets */}
         <div className="flex flex-wrap gap-1.5">
@@ -147,15 +132,6 @@ export function PromptEngineeringOutputTab({
           title="Reasoning Detection"
           hasContent={hasReasoningContent}
         />
-        <EducationPanel title="What is reasoning detection?">
-          <p>
-            <strong>Reasoning detection</strong> parses chain-of-thought blocks from model responses.
-            Models like DeepSeek R1 and Qwen-QwQ output their thinking in special tags.
-          </p>
-          <p>
-            When detected, reasoning is displayed separately (collapsible) from the main response.
-          </p>
-        </EducationPanel>
 
         {/* Reasoning presets */}
         <div className="space-y-2">
@@ -211,15 +187,6 @@ export function PromptEngineeringOutputTab({
           title="Response Processing"
           hasContent={output.trim_incomplete_sentences || output.single_line_mode}
         />
-        <EducationPanel title="What is response processing?">
-          <p>
-            These options clean up model output after generation completes.
-          </p>
-          <ul className="list-disc list-inside space-y-1 ml-2">
-            <li><strong>Trim incomplete</strong> — Remove trailing partial sentences</li>
-            <li><strong>Single line</strong> — Collapse response to one line (for dialogue)</li>
-          </ul>
-        </EducationPanel>
 
         <BoolFieldRow
           label="Trim incomplete sentences"

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
-import { ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
@@ -12,32 +12,6 @@ import type {
   StReasoningTemplate,
   StSystemPromptTemplate,
 } from '../../lib/sillyTavernAdvancedFormatting';
-
-/** Shared expandable education/help panel */
-export function EducationPanel({ title, children }: { title: string; children: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className={cn(
-      'rounded-lg border transition-colors',
-      isOpen ? 'border-zinc-700/50 bg-zinc-900/30' : 'border-zinc-800/40 bg-zinc-900/20'
-    )}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-400 hover:text-zinc-300"
-      >
-        {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <Info className="h-3 w-3" />
-        <span>{title}</span>
-      </button>
-      {isOpen && (
-        <div className="px-3 pb-3 text-xs text-zinc-500 leading-relaxed space-y-2">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function BoolFieldRow({
   label,

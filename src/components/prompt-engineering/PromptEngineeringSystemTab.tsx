@@ -1,6 +1,6 @@
 import type { PromptEngineeringPreset } from '../../types/promptEngineering';
 import { MacroHighlightTextarea } from '../character-forge/MacroHighlightTextarea';
-import { EducationPanel, PromptSectionTitle, createEmptySysprompt } from './promptEngineeringEditorShared';
+import { PromptSectionTitle, createEmptySysprompt } from './promptEngineeringEditorShared';
 
 /** Check if a string has meaningful content (not just whitespace) */
 function hasContent(value: string | undefined): boolean {
@@ -31,20 +31,6 @@ export function PromptEngineeringSystemTab({
           title="System Prompt"
           hasContent={hasContent(sysprompt.content)}
         />
-        <EducationPanel title="What is the System Prompt?">
-          <p>
-            The <strong>System Prompt</strong> defines the general instructions for the AI to follow. 
-            It sets the tone, context, and rules for the conversation.
-          </p>
-          <p>
-            This is typically the <em>first</em> thing the AI sees and establishes the "persona" 
-            or behavior you want. For example: "You are a helpful writing assistant" or 
-            "Write {'{{char}}'}'s next reply in a fictional roleplay."
-          </p>
-          <p className="text-zinc-600">
-            If empty, no system message is sent.
-          </p>
-        </EducationPanel>
         <MacroHighlightTextarea
           value={sysprompt.content}
           onChange={(content) => updateField('content', content)}
@@ -60,24 +46,6 @@ export function PromptEngineeringSystemTab({
           title="Post-History Instructions"
           hasContent={hasContent(sysprompt.post_history)}
         />
-        <EducationPanel title="What are Post-History Instructions?">
-          <p>
-            <strong>Post-History Instructions</strong> are injected <em>after</em> the chat history 
-            but <em>before</em> the prefill. Since they appear closer to the AI's response, 
-            models typically give them <strong>higher priority</strong> than the system prompt.
-          </p>
-          <p>
-            Use this for instructions you want the AI to strongly remember, like:
-          </p>
-          <ul className="list-disc list-inside space-y-1 ml-2">
-            <li>Reminders about response format</li>
-            <li>Current scene context</li>
-            <li>Rules that should override earlier instructions</li>
-          </ul>
-          <p className="text-zinc-600">
-            If empty, nothing is inserted after history.
-          </p>
-        </EducationPanel>
         <MacroHighlightTextarea
           value={sysprompt.post_history ?? ''}
           onChange={(post_history) => updateField('post_history', post_history)}
@@ -93,23 +61,6 @@ export function PromptEngineeringSystemTab({
           title="Prefill (Assistant Start)"
           hasContent={hasContent(sysprompt.prefill)}
         />
-        <EducationPanel title="What is Prefill?">
-          <p>
-            <strong>Prefill</strong> is an assistant-role message added at the very end of the prompt. 
-            The AI treats this as if it <em>already wrote</em> this text and will continue from there.
-          </p>
-          <p>
-            Common uses:
-          </p>
-          <ul className="list-disc list-inside space-y-1 ml-2">
-            <li><code className="text-violet-400">{'{{char}}:'}</code> — Forces the AI to respond as the character</li>
-            <li><code className="text-violet-400">{'<think>'}</code> — Nudges the AI into reasoning mode</li>
-            <li><code className="text-violet-400">Sure! Here's</code> — Bypasses refusals (use responsibly)</li>
-          </ul>
-          <p className="text-amber-500/80 mt-2">
-            ⚠️ Some APIs don't support prefill and may error. Leave empty if unsure.
-          </p>
-        </EducationPanel>
         <MacroHighlightTextarea
           value={sysprompt.prefill ?? ''}
           onChange={(prefill) => updateField('prefill', prefill)}
