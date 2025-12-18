@@ -1,10 +1,11 @@
-import { Settings, Users, Wand2 } from 'lucide-react';
+import { Settings, Users, Wand2, Plug } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useHeaderConfig, useLayoutConfig } from '../hooks/queries/useProfiles';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PromptEngineeringModal } from './prompt-engineering/PromptEngineeringModal';
+import { AiDashboard } from './ai/AiDashboard';
 
 interface AppToolbarProps {
   onOpenSettings: () => void;
@@ -49,6 +50,7 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
   const layout = useLayoutConfig();
   const header = useHeaderConfig();
   const [isPromptEngineeringOpen, setIsPromptEngineeringOpen] = useState(false);
+  const [isAiProvidersOpen, setIsAiProvidersOpen] = useState(false);
 
   const toolbarStyle: React.CSSProperties = useMemo(() => ({
     width: isMobile || header.widthMode === 'full' ? '100%' : `${layout.containerWidth + 5}%`,
@@ -145,6 +147,15 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
           </Button>
         </Link>
         <Button
+          onClick={() => setIsAiProvidersOpen(true)}
+          variant={header.settingsButtonVariant}
+          size="icon"
+          className="shrink-0"
+          aria-label="AI Providers"
+        >
+          <Plug className="h-5 w-5" />
+        </Button>
+        <Button
           onClick={() => setIsPromptEngineeringOpen(true)}
           variant={header.settingsButtonVariant}
           size="icon"
@@ -234,6 +245,7 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
         <header className="shrink-0" style={toolbarStyle}>
           {headerContent}
         </header>
+        <AiDashboard open={isAiProvidersOpen} onOpenChange={setIsAiProvidersOpen} />
         <PromptEngineeringModal open={isPromptEngineeringOpen} onOpenChange={setIsPromptEngineeringOpen} />
       </>
     );
@@ -288,6 +300,7 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
         </header>
       </div>
 
+      <AiDashboard open={isAiProvidersOpen} onOpenChange={setIsAiProvidersOpen} />
       <PromptEngineeringModal open={isPromptEngineeringOpen} onOpenChange={setIsPromptEngineeringOpen} />
     </>
   );
