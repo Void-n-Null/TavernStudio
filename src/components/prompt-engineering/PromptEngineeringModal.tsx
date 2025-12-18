@@ -6,7 +6,6 @@ import { cn } from '../../lib/utils';
 import { PromptEngineeringPresetEditor } from './PromptEngineeringPresetEditor';
 import { PromptEngineeringModalHeader } from './PromptEngineeringModalHeader';
 import { PromptEngineeringModalFooter } from './PromptEngineeringModalFooter';
-import { PromptEngineeringModalMeta } from './PromptEngineeringModalMeta';
 import { usePromptEngineeringModalController } from './usePromptEngineeringModalController';
 import { exportPresetAsFile } from './promptEngineeringFileUtils';
 
@@ -55,35 +54,29 @@ export function PromptEngineeringModal({
             onImportFile={c.importFile}
             onExport={handleExport}
             canExport={!!c.draftPreset}
+            draftName={c.draftName}
+            onDraftNameChange={c.setDraftName}
+            onSetActive={() => {
+              void c.setActiveSelected().then(
+                () => showToast({ message: 'Set active preset', type: 'success' }),
+                (e) => showToast({ message: e instanceof Error ? e.message : 'Failed', type: 'error' })
+              );
+            }}
+            canSetActive={!!c.selectedPreset}
           />
 
-          <div className={cn('flex-1 overflow-auto', isMobile ? 'p-4' : 'p-6')}>
+          <div className={cn('flex-1 overflow-auto', isMobile ? 'p-3' : 'p-4')}>
             {c.isLoading ? (
               <div className="text-sm text-zinc-500">Loading…</div>
             ) : c.draftPreset ? (
-              <div className="space-y-4">
-                <PromptEngineeringModalMeta
-                  isMobile={isMobile}
-                  draftName={c.draftName}
-                  onDraftNameChange={c.setDraftName}
-                  onSetActive={() => {
-                    void c.setActiveSelected().then(
-                      () => showToast({ message: 'Set active preset', type: 'success' }),
-                      (e) => showToast({ message: e instanceof Error ? e.message : 'Failed', type: 'error' })
-                    );
-                  }}
-                  canSetActive={!!c.selectedPreset}
-                />
-
-                <PromptEngineeringPresetEditor
-                  preset={c.draftPreset}
-                  onChange={c.setDraftPreset}
-                  isMobile={isMobile}
-                />
-              </div>
+              <PromptEngineeringPresetEditor
+                preset={c.draftPreset}
+                onChange={c.setDraftPreset}
+                isMobile={isMobile}
+              />
             ) : (
-              <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-5 text-sm text-zinc-500">
-                No presets yet. Create one.
+              <div className="text-sm text-zinc-500 p-4">
+                No presets yet. Click + to create one.
               </div>
             )}
           </div>

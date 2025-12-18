@@ -206,6 +206,7 @@ export function usePromptEngineeringModalController(open: boolean): PromptEngine
 
       const next = await importSt.mutateAsync({ json });
       setSelectedId(next.activePresetId ?? null);
+      showToast({ message: `Imported SillyTavern preset`, type: 'success' });
     },
     [importSt, saveStore, store.presets]
   );

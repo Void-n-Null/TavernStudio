@@ -1,9 +1,10 @@
 import { useCallback, useRef } from 'react';
 import type { ChangeEvent } from 'react';
-import { Plus, Upload, Download, Trash2, MoreVertical } from 'lucide-react';
+import { Plus, Upload, Download, Trash2, Check } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
 import { showToast } from '../ui/toast';
+import { Input } from '../ui/input';
 import {
   Select,
   SelectContent,
@@ -11,13 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '../ui/dropdown-menu';
 import type { PromptEngineeringPreset, PromptEngineeringStore } from '../../types/promptEngineering';
 
 export function PromptEngineeringModalHeader({
@@ -31,6 +25,10 @@ export function PromptEngineeringModalHeader({
   onImportFile,
   onExport,
   canExport,
+  draftName,
+  onDraftNameChange,
+  onSetActive,
+  canSetActive,
 }: {
   isMobile: boolean;
   store: PromptEngineeringStore;
@@ -42,8 +40,13 @@ export function PromptEngineeringModalHeader({
   onImportFile: (file: File) => Promise<void>;
   onExport: () => void;
   canExport: boolean;
+  draftName: string;
+  onDraftNameChange: (name: string) => void;
+  onSetActive: () => void;
+  canSetActive: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isActive = selectedId === store.activePresetId;
 
   const onFileChange = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +55,6 @@ export function PromptEngineeringModalHeader({
 
       try {
         await onImportFile(file);
-        showToast({ message: 'Imported preset', type: 'success' });
       } catch (err) {
         showToast({ message: err instanceof Error ? err.message : 'Import failed', type: 'error' });
       }
@@ -64,50 +66,12 @@ export function PromptEngineeringModalHeader({
 
   const headerRightPad = isMobile ? 'pr-12' : 'pr-14';
 
-  // Mobile: compact header with dropdown menu for actions
-  if (isMobile) {
-    return (
-      <div className={cn('sticky top-0 z-10 border-b border-zinc-800/60 bg-zinc-950/90 backdrop-blur', headerRightPad)}>
-        <div className="p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="text-base font-semibold text-zinc-100">Prompt Engineering</div>
-            </div>
-            
-            {/* Mobile action menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={onCreate}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Preset
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Import
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onExport} disabled={!canExport}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={onDelete} 
-                  disabled={!selectedId}
-                  className="text-red-400 focus:text-red-300"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          
-          {/* Preset selector - full width on mobile */}
+  
+  return (
+    <div className={cn('sticky top-0 z-10 border-b border-zinc-800/50 bg-zinc-950/90 backdrop-blur-md', headerRightPad)}>
+      <div className="p-3 space-y-3">
+        {/* Row 1: Preset selector + actions */}
+        <div className="flex items-center gap-2">
           <Select
             value={selectedId ?? ''}
             onValueChange={(v) => {
@@ -117,102 +81,65 @@ export function PromptEngineeringModalHeader({
               onSelectId(v);
             }}
           >
-            <SelectTrigger className="w-full h-9">
-              <SelectValue placeholder="Select preset" />
+            <SelectTrigger className="h-8 flex-1 bg-zinc-900/50 border-zinc-800/60 text-sm">
+              <SelectValue placeholder="Select preset..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-zinc-950 border-zinc-800">
               {store.presets.map((p: PromptEngineeringPreset) => (
                 <SelectItem key={p.id} value={p.id}>
-                  {p.name}
+                  <span className={cn(p.id === store.activePresetId && 'font-medium')}>
+                    {p.name}
+                    {p.id === store.activePresetId && ' ✓'}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-        
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={onFileChange}
-        />
-      </div>
-    );
-  }
 
-  // Desktop: original layout
-  return (
-    <div className={cn('sticky top-0 z-10 border-b border-zinc-800/60 bg-zinc-950/90 backdrop-blur', headerRightPad)}>
-      <div className="p-4 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-lg font-semibold text-zinc-100">Prompt Engineering</div>
-          <div className="text-xs text-zinc-500 mt-0.5">Global, named formatting presets (import compatible).</div>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onCreate} title="New preset">
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => fileInputRef.current?.click()} title="Import">
+            <Upload className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onExport} disabled={!canExport} title="Export">
+            <Download className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-red-400 hover:text-red-300" onClick={onDelete} disabled={!selectedId} title="Delete">
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
 
-        <div className="flex gap-2 items-center">
-          <div className="flex gap-2 items-center">
-            <Select
-              value={selectedId ?? ''}
-              onValueChange={(v) => {
-                if (isDirty) {
-                  showToast({ message: 'Unsaved changes (save or discard)', type: 'warning' });
-                }
-                onSelectId(v);
-              }}
-            >
-              <SelectTrigger className="w-[260px]">
-                <SelectValue placeholder="Select preset" />
-              </SelectTrigger>
-              <SelectContent>
-                {store.presets.map((p: PromptEngineeringPreset) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button variant="secondary" onClick={onCreate} type="button">
-              New
-            </Button>
-          </div>
-
-          <div className="flex gap-2 items-center">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={onFileChange}
+        {/* Row 2: Name edit + set active (only when preset selected) */}
+        {selectedId && (
+          <div className="flex items-center gap-2">
+            <Input
+              value={draftName}
+              onChange={(e) => onDraftNameChange(e.target.value)}
+              className="h-8 flex-1 bg-transparent border-zinc-800/60 text-sm font-medium"
+              placeholder="Preset name"
             />
-
             <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              type="button"
+              variant={isActive ? 'secondary' : 'outline'}
+              size="sm"
+              className="h-8 shrink-0 text-xs"
+              onClick={onSetActive}
+              disabled={!canSetActive || isActive}
             >
-              Import
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onExport}
-              type="button"
-              disabled={!canExport}
-            >
-              Export
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={onDelete}
-              type="button"
-              disabled={!selectedId}
-            >
-              Delete
+              <Check className="h-3 w-3 mr-1" />
+              {isActive ? 'Active' : 'Use'}
             </Button>
           </div>
-        </div>
+        )}
       </div>
+      
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={onFileChange}
+      />
     </div>
   );
 }
