@@ -14,7 +14,7 @@ import {
 
 // ============ Type Definitions ============
 
-export type ControlType = 'select' | 'switch' | 'slider' | 'color' | 'text' | 'font-upload';
+export type ControlType = 'select' | 'switch' | 'slider' | 'color' | 'text' | 'textarea' | 'svg-upload' | 'font-upload';
 
 export interface SelectOption {
   value: string;
@@ -935,6 +935,13 @@ export const interfaceDesignSections: SectionDefinition[] = [
             max: 24,
             step: 1,
             suffix: 'px',
+            showWhen: { key: 'composer.sendButtonType', value: 'icon' },
+          },
+          {
+            type: 'svg-upload',
+            key: 'composer.sendButtonIconSvg',
+            label: 'Custom Icon SVG',
+            description: 'Paste raw SVG code or drag an .svg file here.',
             showWhen: { key: 'composer.sendButtonType', value: 'icon' },
           },
         ],

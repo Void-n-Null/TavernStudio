@@ -266,6 +266,7 @@ export type ComposerSendButtonType = 'label' | 'icon' | 'hidden';
   sendButtonBorderOpacityDisabled: number;
   sendButtonBorderWidthPx: number;
   sendButtonRadiusPx: number;
+  sendButtonIconSvg?: string;
  }
 
 // ============ Full Config ============

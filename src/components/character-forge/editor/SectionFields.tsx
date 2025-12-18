@@ -125,3 +125,5 @@ export const NoteSectionFields = memo(function NoteSectionFields() {
   return <CharacterNoteSection characterNote={characterNote} noteDepth={noteDepth} noteRole={noteRole} onChange={onChange as any} />;
 });
 
+
+

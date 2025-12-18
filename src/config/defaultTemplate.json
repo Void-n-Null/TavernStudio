@@ -167,7 +167,8 @@
     "sendButtonBorderOpacity": 12,
     "sendButtonBorderOpacityDisabled": 8,
     "sendButtonBorderWidthPx": 0,
-    "sendButtonRadiusPx": 10
+    "sendButtonRadiusPx": 10,
+    "sendButtonIconSvg": ""
   },
   "speakerOverrides": {}
 }

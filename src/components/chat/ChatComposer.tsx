@@ -336,7 +336,18 @@ export function ChatComposer() {
                 aria-label="Send"
                 style={sendButtonStyle}
               >
-                {composer.sendButtonType === 'icon' ? <Send className="h-4 w-4" /> : <span>Send</span>}
+                {composer.sendButtonType === 'icon' ? (
+                  composer.sendButtonIconSvg ? (
+                    <div
+                      className="flex h-4 w-4 items-center justify-center [&>svg]:h-full [&>svg]:w-full"
+                      dangerouslySetInnerHTML={{ __html: composer.sendButtonIconSvg }}
+                    />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )
+                ) : (
+                  <span>Send</span>
+                )}
               </Button>
             )}
           </form>

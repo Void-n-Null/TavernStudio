@@ -16,6 +16,7 @@ export function PromptEngineeringIntro({
     if (!onApplyTemplate) return;
     onApplyTemplate({
       sysprompt: {
+        name: 'Roleplay',
         content: "Write {{char}}'s next reply in a fictional roleplay between {{char}} and {{user}}.\nStay in character at all times. Use sensory details and focus on character internal thoughts.",
         post_history: "[Continue the roleplay. Focus on {{char}}'s perspective.]",
         prefill: "{{char}}:",
@@ -28,6 +29,7 @@ export function PromptEngineeringIntro({
     if (!onApplyTemplate) return;
     onApplyTemplate({
       sysprompt: {
+        name: 'Story',
         content: "You are a collaborative story writing assistant. Help the user expand on their ideas, maintain consistent world-building, and suggest creative plot twists.",
         post_history: "[Write the next scene in the story. Maintain the established tone.]",
       },
