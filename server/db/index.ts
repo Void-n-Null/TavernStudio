@@ -88,9 +88,6 @@ export function initDb(): Database {
 
   // Profiles can have multiple AI configs; one is "active".
   // Existing DBs won’t have this column; add it safely.
-  try {
-    db.run('ALTER TABLE profiles ADD COLUMN active_ai_config_id TEXT');
-  } catch {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS profile_ai_configs (
@@ -110,6 +107,34 @@ export function initDb(): Database {
 
   db.run('CREATE INDEX IF NOT EXISTS idx_profile_ai_configs_profile ON profile_ai_configs(profile_id)');
   
+  // ============ Database Migrations (Local-first style) ============
+  
+  // 1. Ensure 'active_ai_config_id' exists in profiles
+  const profileCols = db.query("PRAGMA table_info(profiles)").all() as any[];
+  if (!profileCols.some(c => c.name === 'active_ai_config_id')) {
+    db.run('ALTER TABLE profiles ADD COLUMN active_ai_config_id TEXT');
+    console.log('🔧 Added active_ai_config_id to profiles');
+  }
+
+  // 2. Ensure all columns exist in character_cards
+  const cardCols = db.query("PRAGMA table_info(character_cards)").all() as any[];
+  const requiredCardCols = [
+    { name: 'png_blob', type: 'BLOB' },
+    { name: 'png_mime', type: 'TEXT' },
+    { name: 'png_sha256', type: 'TEXT' },
+    { name: 'png_updated_at', type: 'INTEGER' },
+    { name: 'creator', type: 'TEXT' },
+    { name: 'token_count', type: 'INTEGER' },
+    { name: 'token_count_updated_at', type: 'INTEGER' }
+  ];
+
+  for (const col of requiredCardCols) {
+    if (!cardCols.some(c => c.name === col.name)) {
+      db.run(`ALTER TABLE character_cards ADD COLUMN ${col.name} ${col.type}`);
+      console.log(`🔧 Added ${col.name} to character_cards`);
+    }
+  }
+
   db.run(`
     CREATE TABLE IF NOT EXISTS design_templates (
       id TEXT PRIMARY KEY,
@@ -152,15 +177,6 @@ export function initDb(): Database {
       updated_at INTEGER NOT NULL
     )
   `);
-
-  // Existing DBs won’t have these columns; add them safely.
-  try { db.run('ALTER TABLE character_cards ADD COLUMN png_blob BLOB'); } catch {}
-  try { db.run('ALTER TABLE character_cards ADD COLUMN png_mime TEXT'); } catch {}
-  try { db.run('ALTER TABLE character_cards ADD COLUMN png_sha256 TEXT'); } catch {}
-  try { db.run('ALTER TABLE character_cards ADD COLUMN png_updated_at INTEGER'); } catch {}
-  try { db.run('ALTER TABLE character_cards ADD COLUMN creator TEXT'); } catch {}
-  try { db.run('ALTER TABLE character_cards ADD COLUMN token_count INTEGER'); } catch {}
-  try { db.run('ALTER TABLE character_cards ADD COLUMN token_count_updated_at INTEGER'); } catch {}
 
   db.run('CREATE INDEX IF NOT EXISTS idx_character_cards_name ON character_cards(name)');
   db.run('CREATE INDEX IF NOT EXISTS idx_character_cards_spec ON character_cards(spec)');

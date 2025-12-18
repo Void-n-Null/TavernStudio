@@ -121,37 +121,30 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 // ============ List (metadata only) ============
 characterCardRoutes.get('/', (c) => {
-  const rows = prepare<CharacterCardRow>(`
-    SELECT id, name, spec, spec_version, source, creator, token_count, token_count_updated_at, raw_json, created_at, updated_at, png_mime, png_sha256, png_blob
+  // We do NOT select png_blob here. Blobs are huge and shouldn't be in the list route.
+  // The UI can fetch them via /api/character-cards/:id/avatar when needed.
+  // We use png_blob IS NOT NULL as a proxy for has_png.
+  const rows = prepare<CharacterCardRow & { has_png_flag: number }>(`
+    SELECT id, name, spec, spec_version, source, creator, token_count, token_count_updated_at, raw_json, created_at, updated_at, png_mime, png_sha256,
+           (png_blob IS NOT NULL) as has_png_flag
     FROM character_cards
     ORDER BY updated_at DESC
-  `).all() as CharacterCardRow[];
-
-  const needsCreatorBackfill = rows.some((r) => r.creator == null);
-  const updateCreator = needsCreatorBackfill ? prepare('UPDATE character_cards SET creator = ? WHERE id = ?') : null;
+  `).all() as (CharacterCardRow & { has_png_flag: number })[];
 
   const out: CharacterCardRecordMeta[] = [];
   for (const row of rows) {
-    let parsed: unknown | null = null;
+    let parsed: any = null;
     try {
       parsed = JSON.parse(row.raw_json);
     } catch {
       parsed = null;
     }
 
-    let creator = row.creator ?? undefined;
-    if (creator == null && parsed) {
-      creator = extractCreator(parsed);
-      if (creator != null && updateCreator) updateCreator.run(creator, row.id);
-    }
-
     const tags = parsed ? extractTags(parsed) : undefined;
 
     out.push({
-      ...rowToMeta({
-        ...row,
-        creator: creator ?? row.creator ?? null,
-      }),
+      ...rowToMeta(row),
+      has_png: Boolean(row.has_png_flag),
       tags,
     });
   }
