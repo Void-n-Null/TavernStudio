@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { cn } from '../../../lib/utils';
 import { getCharacterEditorDraftSnapshot, useCharacterEditorStore } from '../../../store/characterEditorStore';
 import type { ValidationLevel } from '../ValidationBadge';
-import { EditorSection, SECTIONS } from './types';
+import { type EditorSection, SECTIONS } from './types';
 import { computeSectionIssueSummary, shallowEqualSectionIssueSummary } from './utils';
 
 interface EditorSectionNavProps {
