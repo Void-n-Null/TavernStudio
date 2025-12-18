@@ -23,6 +23,14 @@ export function ChatComposer() {
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Keep latest chat data in refs so event handlers can read it without forcing derived work on every render.
+  const tailIdRef = useRef<string | null>(tailId);
+  const nodesRef = useRef(nodes);
+  const speakersRef = useRef(speakers);
+  tailIdRef.current = tailId;
+  nodesRef.current = nodes;
+  speakersRef.current = speakers;
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -31,23 +39,34 @@ export function ChatComposer() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  const isMac = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    return /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+  }, []);
+
   const userSpeakerId = useMemo(() => {
     const user = Array.from(speakers.values()).find((s) => s.is_user);
     return user?.id ?? Array.from(speakers.values())[0]?.id ?? null;
   }, [speakers]);
 
-  const lastUserMessage = useMemo(() => {
-    if (!tailId) return null;
-    let currentId: string | null = tailId;
+  const getLastUserMessage = useCallback((): string | null => {
+    const currentTailId = tailIdRef.current;
+    if (!currentTailId) return null;
+
+    const nodesMap = nodesRef.current;
+    const speakersMap = speakersRef.current;
+
+    let currentId: string | null = currentTailId;
     while (currentId) {
-      const node = nodes.get(currentId);
+      const node = nodesMap.get(currentId);
       if (!node) break;
-      const sp = speakers.get(node.speaker_id);
+      const sp = speakersMap.get(node.speaker_id);
       if (sp?.is_user && node.message.trim()) return node.message;
       currentId = node.parent_id;
     }
+
     return null;
-  }, [nodes, speakers, tailId]);
+  }, []);
 
   const isEmpty = !value.trim();
 
@@ -214,7 +233,6 @@ export function ChatComposer() {
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 onKeyDown={(e) => {
-                  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
                   const mod = isMac ? e.metaKey : e.ctrlKey;
 
                   if (mod && (e.key === 'z' || e.key === 'Z')) {
@@ -272,6 +290,7 @@ export function ChatComposer() {
                   if (e.key === 'ArrowUp') {
                     const el = e.currentTarget;
                     const isAtStart = el.selectionStart === 0 && el.selectionEnd === 0;
+                    const lastUserMessage = getLastUserMessage();
                     if (isAtStart && !value.trim() && lastUserMessage) {
                       e.preventDefault();
                       setDraft(lastUserMessage, lastUserMessage.length, lastUserMessage.length, 'shortcut');
