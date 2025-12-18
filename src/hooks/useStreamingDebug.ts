@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStreamingStore } from '../store/streamingStore';
 import { useStreaming } from './useStreaming';
 import { OpenRouterStreamSource } from '../streaming/OpenRouterStreamSource';
+import { PromptFactory } from '../lib/PromptFactory';
 
 export type StreamingDebugScenarioId = 'markdown' | 'roleplay_long' | 'roleplay_spicy';
 export type StreamingDebugChunkMode = 'characters' | 'openai_tokens';
@@ -428,7 +429,23 @@ export function useStreamingDebug(): StreamingDebugState {
         });
 
         let i = 0;
+        const messages = PromptFactory.createChatPrompt({
+          preset: {
+            id: 'debug',
+            name: 'Debug',
+            mode: 'chat',
+            source: 'manual',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          history: [],
+          speakers: new Map(),
+          charId: 'bot',
+          userId: 'user',
+        });
+
         await src.stream({
+          system: messages.system,
           prompt: openRouterPrompt || scenario.defaultPrompt,
           signal: ac.signal,
           onDelta: (delta) => {
