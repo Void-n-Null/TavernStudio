@@ -1,5 +1,5 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { streamText } from 'ai';
+import { streamText, type ModelMessage } from 'ai';
 
 export type OpenRouterStreamSourceOptions = {
   apiKey: string;
@@ -13,7 +13,9 @@ export type OpenRouterStreamSourceOptions = {
 };
 
 export type OpenRouterStreamRequest = {
-  prompt: string;
+  system?: string;
+  prompt?: string;
+  messages?: ModelMessage[];
   signal?: AbortSignal;
   onDelta: (delta: string) => void;
 };
@@ -48,15 +50,22 @@ export class OpenRouterStreamSource {
       },
     });
 
-    const result = await streamText({
-      model: openrouter.chat(this.modelId),
-      prompt: req.prompt,
+    const options: any = {
+      model: openrouter(this.modelId),
+      system: req.system,
       abortSignal: req.signal,
-    });
+    };
+
+    if (req.messages) {
+      options.messages = req.messages;
+    } else {
+      options.prompt = req.prompt || '';
+    }
+
+    const result = await streamText(options);
 
     for await (const delta of result.textStream) {
       if (delta) req.onDelta(delta);
     }
   }
 }
-
