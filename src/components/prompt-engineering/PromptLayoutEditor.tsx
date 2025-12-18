@@ -106,7 +106,7 @@ function PromptBlockRow({
           className={cn(
             'w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center',
             block.enabled
-              ? 'bg-zinc-600 border-zinc-500'
+              ? 'bg-blue-600 border-blue-500'
               : 'bg-transparent border-zinc-700 hover:border-zinc-500'
           )}
           aria-label={block.enabled ? 'Disable block' : 'Enable block'}

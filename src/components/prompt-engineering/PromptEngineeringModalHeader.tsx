@@ -70,6 +70,11 @@ export function PromptEngineeringModalHeader({
   return (
     <div className={cn('sticky top-0 z-10 border-b border-zinc-800/50 bg-zinc-950/90 backdrop-blur-md', headerRightPad)}>
       <div className="p-3 space-y-3">
+        {/* Row 0: Title */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold tracking-tight text-zinc-100">Prompt Engineering</h2>
+        </div>
+
         {/* Row 1: Preset selector + actions */}
         <div className="flex items-center gap-2">
           <Select

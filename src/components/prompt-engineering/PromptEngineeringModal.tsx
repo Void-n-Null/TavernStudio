@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { Info } from 'lucide-react';
 import { Dialog, DialogContent } from '../ui/dialog';
 import { showToast } from '../ui/toast';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -66,6 +67,31 @@ export function PromptEngineeringModal({
           />
 
           <div className={cn('flex-1 overflow-auto', isMobile ? 'p-3' : 'p-4')}>
+            {/* Explanation Card */}
+            <div className="mb-6 rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-zinc-400">
+                  <Info className="h-4 w-4" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-zinc-200">What is this?</h3>
+                  <p className="text-xs leading-relaxed text-zinc-400">
+                    Prompt engineering is the blueprint for how the AI thinks and responds. It defines the character's voice, knowledge, and the rules of the world.
+                  </p>
+                  <div className="mt-3 grid gap-4 pt-3 border-t border-zinc-800/40 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">For Beginners</div>
+                      <p className="text-[11px] text-zinc-500">Think of it as giving clear instructions to an actor playing a role. You're setting the scene and behavior.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">For Veterans</div>
+                      <p className="text-[11px] text-zinc-500">Fine-tune the system prompt, context layout, and instruct formatting to maximize model logic and coherence.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {c.isLoading ? (
               <div className="text-sm text-zinc-500">Loading…</div>
             ) : c.draftPreset ? (
