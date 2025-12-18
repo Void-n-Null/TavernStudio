@@ -81,13 +81,6 @@ const transitionOptions: SelectOption[] = [
 
 export const interfaceDesignSections: SectionDefinition[] = [
   {
-    id: 'profile',
-    label: 'Profiles',
-    icon: User,
-    description: 'Save and switch between style configurations',
-    groups: [], // Profile tab is handled specially
-  },
-  {
     id: 'custom-css',
     label: 'Custom CSS',
     icon: Palette,

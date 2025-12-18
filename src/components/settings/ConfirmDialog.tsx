@@ -1,9 +1,9 @@
 import { Button } from '../ui/button';
-import { useDesignConfigModalState } from '../../store/designConfigModalState';
+import { useSettingsModalState } from '../../store/settingsModalState';
 
 export function ConfirmDialog() {
-  const confirmDialog = useDesignConfigModalState(s => s.confirmDialog);
-  const hideConfirm = useDesignConfigModalState(s => s.hideConfirm);
+  const confirmDialog = useSettingsModalState(s => s.confirmDialog);
+  const hideConfirm = useSettingsModalState(s => s.hideConfirm);
   
   if (!confirmDialog.open) return null;
   

@@ -1,8 +1,7 @@
 import { memo } from 'react';
 import { cn } from '../../lib/utils';
-import { interfaceDesignSections } from './designConfigSchema';
+import { interfaceDesignSections } from './interfaceDesignSchema';
 import { GroupRenderer } from './GroupRenderer';
-import { ProfileSection } from './ProfileSection';
 
 interface SectionContentProps {
   sectionId: string;
@@ -28,22 +27,18 @@ export const SectionContent = memo(function SectionContent({
         <p className="text-xs text-zinc-500 mt-0.5">{section.description}</p>
       </div>
 
-      {sectionId === 'profile' ? (
-        <ProfileSection />
-      ) : (
-        section.groups.map((group, i) => (
-          <GroupRenderer
-            key={group.title || i}
-            group={group}
-            config={config}
-            onChange={onChange}
-            compact={compactMode}
-            groupIndex={i}
-            sectionId={sectionId}
-            isMobile={isMobile}
-          />
-        ))
-      )}
+      {section.groups.map((group, i) => (
+        <GroupRenderer
+          key={group.title || i}
+          group={group}
+          config={config}
+          onChange={onChange}
+          compact={compactMode}
+          groupIndex={i}
+          sectionId={sectionId}
+          isMobile={isMobile}
+        />
+      ))}
     </div>
   );
 });

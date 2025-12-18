@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { interfaceDesignSections, type ControlDefinition } from './designConfigSchema';
+import { interfaceDesignSections, type ControlDefinition } from './interfaceDesignSchema';
 import { ControlRenderer } from './controls';
 
 interface SearchResult {

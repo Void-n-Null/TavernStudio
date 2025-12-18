@@ -4,18 +4,26 @@
  * Replaces the sidebar on mobile with a compact horizontal pill navigation.
  */
 
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { interfaceDesignSections } from './designConfigSchema';
-import { useDesignConfigModalState } from '../../store/designConfigModalState';
+import { useSettingsModalState } from '../../store/settingsModalState';
 
-export function MobileSectionNav() {
-  const activeSection = useDesignConfigModalState(s => s.activeSection);
-  const setActiveSection = useDesignConfigModalState(s => s.setActiveSection);
-  const setSearchQuery = useDesignConfigModalState(s => s.setSearchQuery);
+interface MobileSectionNavProps {
+  allSections: Array<{
+    id: string;
+    label: string;
+    icon: LucideIcon;
+  }>;
+}
+
+export function MobileSectionNav({ allSections }: MobileSectionNavProps) {
+  const activeSection = useSettingsModalState(s => s.activeSection);
+  const setActiveSection = useSettingsModalState(s => s.setActiveSection);
+  const setSearchQuery = useSettingsModalState(s => s.setSearchQuery);
 
   return (
     <nav className="flex gap-1.5 overflow-x-auto px-3 py-2 bg-zinc-950/80 border-b border-zinc-800/50 scrollbar-none">
-      {interfaceDesignSections.map((section) => (
+      {allSections.map((section) => (
         <button
           key={section.id}
           onClick={() => {

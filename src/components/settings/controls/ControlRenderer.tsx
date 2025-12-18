@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ColorPicker } from './ColorPicker';
 import { SliderControl } from './SliderControl';
 import { CustomCssEditorControl } from './CustomCssEditorControl';
-import { getValueByPath, type ControlDefinition } from '../designConfigSchema';
+import { getValueByPath, type ControlDefinition } from '../interfaceDesignSchema';
 import { useFonts, useUploadFont, useDeleteFont } from '../../../hooks/queries/useFonts';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 

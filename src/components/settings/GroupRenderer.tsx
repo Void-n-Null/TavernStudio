@@ -5,8 +5,8 @@
 import { ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ControlRenderer } from './controls';
-import { getValueByPath, type ControlGroup } from './designConfigSchema';
-import { useDesignConfigModalState } from '../../store/designConfigModalState';
+import { getValueByPath, type ControlGroup } from './interfaceDesignSchema';
+import { useSettingsModalState } from '../../store/settingsModalState';
 
 interface CardProps {
   children: React.ReactNode;
@@ -42,8 +42,8 @@ export function GroupRenderer({
 }: GroupRendererProps) {
   const groupKey = `${sectionId}-${groupIndex}`;
   // Use selectors to avoid re-renders when unrelated groups collapse/expand
-  const isCollapsed = useDesignConfigModalState(s => s.collapsedGroups.has(groupKey));
-  const toggleGroupCollapsed = useDesignConfigModalState(s => s.toggleGroupCollapsed);
+  const isCollapsed = useSettingsModalState(s => s.collapsedGroups.has(groupKey));
+  const toggleGroupCollapsed = useSettingsModalState(s => s.toggleGroupCollapsed);
   
   if (group.showWhen) {
     const conditionValue = getValueByPath(config, group.showWhen.key);
