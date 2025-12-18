@@ -1,13 +1,43 @@
+import { useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
+import { ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import type {
   StContextTemplate,
   StInstructTemplate,
+  StOutputTemplate,
   StReasoningTemplate,
   StSystemPromptTemplate,
 } from '../../lib/sillyTavernAdvancedFormatting';
+
+/** Shared expandable education/help panel */
+export function EducationPanel({ title, children }: { title: string; children: ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className={cn(
+      'rounded-lg border transition-colors',
+      isOpen ? 'border-zinc-700/50 bg-zinc-900/30' : 'border-zinc-800/40 bg-zinc-900/20'
+    )}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-400 hover:text-zinc-300"
+      >
+        {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <Info className="h-3 w-3" />
+        <span>{title}</span>
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-3 text-xs text-zinc-500 leading-relaxed space-y-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function BoolFieldRow({
   label,
@@ -105,7 +135,7 @@ export function PromptSectionTitle({
     <div className="min-w-0">
       <div className={`text-sm font-semibold ${hasContent ? 'text-zinc-100' : 'text-zinc-500'}`}>
         {title}
-        {hasContent && <span className="ml-2 text-xs text-emerald-500/80">●</span>}
+        {hasContent && <span className="ml-2 text-xs text-zinc-500">●</span>}
       </div>
       {subtitle && <div className="text-xs text-zinc-600 mt-0.5">{subtitle}</div>}
     </div>
@@ -172,5 +202,21 @@ export function createEmptyReasoning(name: string): StReasoningTemplate {
     prefix: '',
     suffix: '',
     separator: '',
+  };
+}
+
+export function createEmptyOutput(name: string): StOutputTemplate {
+  return {
+    name,
+    // Reasoning detection
+    reasoning_prefix: '',
+    reasoning_suffix: '',
+    reasoning_separator: '',
+    auto_parse_reasoning: true,
+    // Stop strings
+    custom_stop_strings: [],
+    // Response processing
+    trim_incomplete_sentences: false,
+    single_line_mode: false,
   };
 }

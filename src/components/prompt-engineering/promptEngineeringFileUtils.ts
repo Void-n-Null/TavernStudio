@@ -15,6 +15,7 @@ export function createEmptyPreset(name: string): PromptEngineeringPreset {
     name,
     createdAt: now,
     updatedAt: now,
+    mode: 'chat',
     source: 'manual',
   };
 }
