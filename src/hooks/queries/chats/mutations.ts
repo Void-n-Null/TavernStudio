@@ -7,7 +7,12 @@ export function useCreateChat() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (name: string) => chats.create(name),
+    mutationFn: (params: {
+      name: string;
+      character_ids?: string[];
+      persona_id?: string;
+      tags?: string[];
+    }) => chats.create(params),
     onSuccess: (newChat) => {
       queryClient.setQueryData<ChatMeta[]>(queryKeys.chats.list(), (old) => (old ? [newChat, ...old] : [newChat]));
     },

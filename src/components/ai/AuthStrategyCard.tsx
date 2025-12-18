@@ -3,7 +3,7 @@ import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { toast } from '../ui/toast';
 import { aiProviders } from '../../api/client';
-import type { SecretDraftKey } from './useAiConnectionDebug';
+import type { SecretDraftKey } from './useAiProvidersModalController';
 
 interface AuthStrategyCardProps {
   providerId: string;

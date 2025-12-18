@@ -4,6 +4,7 @@ import { Button } from '../../ui/button';
 
 export type HeroHeaderProps = {
   data: {
+    id: string;
     name: string;
     specLabel: string;
     hasPng: boolean;
