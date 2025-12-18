@@ -4,12 +4,10 @@
  * Supports both creating new cards and editing existing ones.
  */
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { X, Save } from 'lucide-react';
 import { 
   useCharacterCard, 
-  useCreateCharacterCard, 
-  useUpdateCharacterCard,
   useUpdateCardAvatar,
   useDeleteCardAvatar,
   useImportPngCard,
@@ -20,11 +18,12 @@ import {
 } from '../../hooks/queries/useCharacterCards';
 import { Button } from '../ui/button';
 import { showToast } from '../ui/toast';
-import { validateCharacterCard } from './ValidationBadge';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ImportExportBar } from './ImportExportBar';
 import { AvatarSection } from './sections/AvatarSection';
 import { extractCardFromPngFile } from '../../utils/cardPng';
 import { getCharacterEditorDraftSnapshot, useCharacterEditorStore } from '../../store/characterEditorStore';
+import { useCharacterEditorSave } from './hooks/useCharacterEditorSave';
 
 // Extracted sub-components and utils
 import type { EditorSection } from './editor/types';
@@ -50,28 +49,26 @@ interface CharacterEditorProps {
 export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorProps) {
   const isCreating = !cardId;
   const [activeSection, setActiveSection] = useState<EditorSection>('core');
-  const autosaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const idleSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  
+  // Confirmation states
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showAvatarDeleteConfirm, setShowAvatarDeleteConfirm] = useState(false);
 
   const isDirty = useCharacterEditorStore((s) => s.isDirty);
   const loadDraft = useCharacterEditorStore((s) => s.loadDraft);
   const replaceDraft = useCharacterEditorStore((s) => s.replaceDraft);
-  const markSavedIfVersionMatches = useCharacterEditorStore((s) => s.markSavedIfVersionMatches);
   
+  const { handleSave, isSaving, lastSavedAt } = useCharacterEditorSave({ cardId, onSaved });
+
   // Queries
   const { data: existingCard, isLoading } = useCharacterCard(cardId);
-  const createCard = useCreateCharacterCard();
-  const updateCard = useUpdateCharacterCard();
   const updateAvatar = useUpdateCardAvatar();
   const deleteAvatar = useDeleteCardAvatar();
   const importPng = useImportPngCard();
   const importJson = useImportJsonCard();
-
-  useEffect(() => {
-    if (existingCard?.updated_at) setLastSavedAt(existingCard.updated_at);
-  }, [existingCard?.updated_at]);
   
+  const getRawJson = useCallback(() => JSON.stringify(getCharacterEditorDraftSnapshot(), null, 2), []);
+
   // Load existing card data into the draft store.
   useEffect(() => {
     if (!cardId) {
@@ -88,123 +85,10 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
       }
     }
   }, [cardId, existingCard, loadDraft]);
-  
-  const getRawJson = useCallback(() => JSON.stringify(getCharacterEditorDraftSnapshot(), null, 2), []);
 
   // Avatar URL for display
   const avatarUrl =
     cardId && existingCard?.has_png ? getAvatarUrlVersioned(cardId, existingCard?.png_sha256) : null;
-  
-  // Save handler
-  const handleSave = useCallback(async (opts?: { silent?: boolean; reason?: 'manual' | 'autosave' | 'hotkey' }) => {
-    const silent = Boolean(opts?.silent);
-    const saveDirtyVersion = useCharacterEditorStore.getState().dirtyVersion;
-    const draft = getCharacterEditorDraftSnapshot();
-    const validationMessages = validateCharacterCard(draft);
-    const hasErrors = validationMessages.some((m) => m.level === 'error');
-    if (hasErrors) {
-      if (!silent) showToast({ message: 'Please fix errors before saving', type: 'error' });
-      return;
-    }
-    
-    try {
-      if (isCreating) {
-        const result = await createCard.mutateAsync(draft);
-        if (!silent) showToast({ message: 'Character created', type: 'success' });
-        // In create mode, we navigate to edit and remount anyway, but keep semantics correct.
-        markSavedIfVersionMatches(saveDirtyVersion);
-        setLastSavedAt(Date.now());
-        onSaved(result.id);
-      } else {
-        await updateCard.mutateAsync({ id: cardId, card: draft });
-        if (!silent) showToast({ message: 'Character saved', type: 'success' });
-        // Only clear dirty if nothing changed while the save was in-flight.
-        markSavedIfVersionMatches(saveDirtyVersion);
-        setLastSavedAt(Date.now());
-        onSaved(cardId);
-      }
-    } catch (err) {
-      // Autosave should not spam; only show toast on failure.
-      showToast({
-        message: err instanceof Error ? err.message : 'Save failed',
-        type: 'error',
-      });
-    }
-  }, [cardId, createCard, isCreating, markSavedIfVersionMatches, onSaved, updateCard]);
-
-  const handleSaveRef = useRef(handleSave);
-  handleSaveRef.current = handleSave;
-
-  const pendingRef = useRef(false);
-  pendingRef.current = Boolean(createCard.isPending || updateCard.isPending);
-
-  // Ctrl/Cmd+S save hotkey (override browser default)
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const isSave = (e.key === 's' || e.key === 'S') && (e.ctrlKey || e.metaKey);
-      if (!isSave) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      // Don't enqueue multiple saves.
-      if (createCard.isPending || updateCard.isPending) return;
-      void handleSave({ silent: false, reason: 'hotkey' });
-    };
-
-    window.addEventListener('keydown', onKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true } as any);
-  }, [createCard.isPending, handleSave, updateCard.isPending]);
-
-  // Autosave scheduling (store-driven; avoids React rerender coupling to draft changes).
-  useEffect(() => {
-    const clearIdle = () => {
-      if (idleSaveTimerRef.current) clearTimeout(idleSaveTimerRef.current);
-      idleSaveTimerRef.current = null;
-    };
-
-    const scheduleIdle = () => {
-      clearIdle();
-      idleSaveTimerRef.current = setTimeout(() => {
-        const state = useCharacterEditorStore.getState();
-        if (!state.isDirty) return;
-        if (pendingRef.current) return;
-        void handleSaveRef.current({ silent: true, reason: 'autosave' });
-      }, 2_000);
-    };
-
-    const unsub = useCharacterEditorStore.subscribe(
-      (s) => s.dirtyVersion,
-      () => {
-        // Any edit should push autosave out.
-        scheduleIdle();
-      }
-    );
-
-    if (autosaveTimerRef.current) clearInterval(autosaveTimerRef.current);
-    autosaveTimerRef.current = setInterval(() => {
-      const state = useCharacterEditorStore.getState();
-      if (!state.isDirty) return;
-      if (pendingRef.current) return;
-      void handleSaveRef.current({ silent: true, reason: 'autosave' });
-    }, 60_000);
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== 'hidden') return;
-      const state = useCharacterEditorStore.getState();
-      if (!state.isDirty) return;
-      if (pendingRef.current) return;
-      void handleSaveRef.current({ silent: true, reason: 'autosave' });
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      unsub();
-      clearIdle();
-      if (autosaveTimerRef.current) clearInterval(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, []);
   
   // Avatar upload
   const handleAvatarChange = async (file: File) => {
@@ -223,15 +107,27 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
       });
     }
   };
+
+  const handleAvatarDelete = async () => {
+    if (!cardId) return;
+    try {
+      await deleteAvatar.mutateAsync(cardId);
+      showToast({ message: 'Avatar removed', type: 'success' });
+    } catch (err) {
+      showToast({
+        message: err instanceof Error ? err.message : 'Avatar removal failed',
+        type: 'error',
+      });
+    }
+  };
   
   // Close with dirty check
   const handleClose = () => {
     if (isDirty) {
-      if (!confirm('You have unsaved changes. Discard them?')) {
-        return;
-      }
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
     }
-    onClose();
   };
 
   if (isLoading && cardId) {
@@ -244,6 +140,26 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-zinc-950/50">
+      <ConfirmDialog
+        open={showCloseConfirm}
+        onOpenChange={setShowCloseConfirm}
+        title="Unsaved Changes"
+        description="You have unsaved changes. Are you sure you want to discard them and close?"
+        confirmText="Discard and Close"
+        onConfirm={onClose}
+        variant="destructive"
+      />
+
+      <ConfirmDialog
+        open={showAvatarDeleteConfirm}
+        onOpenChange={setShowAvatarDeleteConfirm}
+        title="Remove Avatar"
+        description="Are you sure you want to remove the character avatar?"
+        confirmText="Remove"
+        onConfirm={handleAvatarDelete}
+        variant="destructive"
+      />
+
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-zinc-800/50 bg-zinc-950/80 px-6 py-4">
         <div>
@@ -256,7 +172,7 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
         </div>
         
         <div className="flex items-center gap-3">
-          {createCard.isPending || updateCard.isPending ? (
+          {isSaving ? (
             <span className="text-xs text-violet-300">Saving…</span>
           ) : isDirty ? (
             <span className="text-xs text-amber-400">Unsaved changes</span>
@@ -265,11 +181,11 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
           ) : null}
           <Button
             onClick={() => handleSave({ silent: false, reason: 'manual' })}
-            disabled={createCard.isPending || updateCard.isPending}
+            disabled={isSaving}
             className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
           >
             <Save className="mr-1.5 h-4 w-4" />
-            {createCard.isPending || updateCard.isPending ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
           <button
             onClick={handleClose}
@@ -344,16 +260,7 @@ export function CharacterEditor({ cardId, onClose, onSaved }: CharacterEditorPro
                           showToast({ message: 'Save the character first to manage the avatar', type: 'info' });
                           return;
                         }
-                        if (!confirm('Remove avatar?')) return;
-                        try {
-                          await deleteAvatar.mutateAsync(cardId);
-                          showToast({ message: 'Avatar removed', type: 'success' });
-                        } catch (err) {
-                          showToast({
-                            message: err instanceof Error ? err.message : 'Avatar removal failed',
-                            type: 'error',
-                          });
-                        }
+                        setShowAvatarDeleteConfirm(true);
                       }}
                       isUploading={updateAvatar.isPending || deleteAvatar.isPending}
                     />
