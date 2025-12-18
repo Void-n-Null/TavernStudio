@@ -63,25 +63,36 @@ function toWireFormat(nodes: ChatNode[]) {
   const speakerIndex = new Map(speakerIds.map((id, i) => [id, i]));
   
   // Fetch speaker data (check cache first, then DB)
-  const speakers: Speaker[] = speakerIds.map(id => {
-    // Try cache first
+  const speakers: Speaker[] = [];
+  const missingIds: string[] = [];
+  
+  for (const id of speakerIds) {
     const cached = getCachedSpeaker(id);
-    if (cached) return cached;
+    if (cached) {
+      speakers.push(cached);
+    } else {
+      missingIds.push(id);
+    }
+  }
+
+  if (missingIds.length > 0) {
+    const placeholders = missingIds.map(() => '?').join(',');
+    const rows = prepare<SpeakerRow>(`SELECT * FROM speakers WHERE id IN (${placeholders})`).all(...missingIds) as SpeakerRow[];
     
-    // Fall back to DB
-    const row = prepare<SpeakerRow>('SELECT * FROM speakers WHERE id = ?').get(id) as SpeakerRow | null;
-    if (row) {
-      return {
+    for (const row of rows) {
+      speakers.push({
         id: row.id,
         name: row.name,
         avatar_url: row.avatar_url ?? undefined,
         color: row.color ?? undefined,
         is_user: Boolean(row.is_user),
-      };
+      });
     }
-    // Fallback if speaker not found
-    return { id, name: 'Unknown', is_user: false };
-  });
+  }
+  
+  // Re-sort speakers to match speakerIds order (important for wire format consistency)
+  const speakersMap = new Map(speakers.map(s => [s.id, s]));
+  const sortedSpeakers = speakerIds.map(id => speakersMap.get(id) || { id, name: 'Unknown', is_user: false });
   
   // Convert nodes to compact format
   const wireNodes = nodes.map(n => ({
@@ -309,23 +320,18 @@ chatRoutes.delete('/:chatId/messages/:nodeId', (c) => {
     const node = prepare<NodeRow>('SELECT * FROM chat_nodes WHERE id = ?').get(nodeId) as NodeRow | null;
     if (!node) return;
     
-    // Collect all descendant IDs
-    const toDelete: string[] = [nodeId];
-    const collectDescendants = (id: string) => {
-      const n = prepare<NodeRow>('SELECT * FROM chat_nodes WHERE id = ?').get(id) as NodeRow | null;
-      if (n) {
-        const childIds = JSON.parse(n.child_ids) as string[];
-        childIds.forEach(childId => {
-          toDelete.push(childId);
-          collectDescendants(childId);
-        });
-      }
-    };
-    collectDescendants(nodeId);
-    
-    // Delete all collected nodes
-    const placeholders = toDelete.map(() => '?').join(',');
-    prepare(`DELETE FROM chat_nodes WHERE id IN (${placeholders})`).run(...toDelete);
+    // Delete all collected nodes using a recursive CTE to find descendants
+    prepare(`
+      DELETE FROM chat_nodes 
+      WHERE id IN (
+        WITH RECURSIVE descendants(id) AS (
+          SELECT ?
+          UNION ALL
+          SELECT cn.id FROM chat_nodes cn JOIN descendants d ON cn.parent_id = d.id
+        )
+        SELECT id FROM descendants
+      )
+    `).run(nodeId);
     
     // Update parent's child_ids
     if (node.parent_id) {
