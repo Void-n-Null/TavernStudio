@@ -1,38 +1,14 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Info, Sparkles } from 'lucide-react';
 import type { PromptEngineeringPreset } from '../../types/promptEngineering';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { MacroHighlightTextarea } from '../character-forge/MacroHighlightTextarea';
-import { BoolFieldRow, PromptSectionTitle, createEmptyInstruct } from './promptEngineeringEditorShared';
+import { BoolFieldRow, EducationPanel, PromptSectionTitle, createEmptyInstruct } from './promptEngineeringEditorShared';
 
-/** Expandable education section */
-function EducationPanel({ title, children }: { title: string; children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-zinc-800/50 bg-zinc-900/20">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
-      >
-        {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <Info className="h-3 w-3" />
-        <span>{title}</span>
-      </button>
-      {isOpen && (
-        <div className="px-3 pb-3 text-xs text-zinc-500 leading-relaxed space-y-2">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Common instruct format presets */
+/** Common instruct format presets with documentation */
 const FORMAT_PRESETS = {
   chatml: {
-    name: 'ChatML (OpenAI)',
+    name: 'ChatML',
+    desc: 'OpenAI legacy, Qwen, Yi, many finetunes',
     system_sequence: '<|im_start|>system\n',
     system_suffix: '<|im_end|>\n',
     input_sequence: '<|im_start|>user\n',
@@ -41,18 +17,20 @@ const FORMAT_PRESETS = {
     output_suffix: '<|im_end|>\n',
     stop_sequence: '<|im_end|>',
   },
-  llama2: {
-    name: 'Llama 2 Chat',
-    system_sequence: '[INST] <<SYS>>\n',
-    system_suffix: '\n<</SYS>>\n\n',
-    input_sequence: '',
-    input_suffix: ' [/INST] ',
-    output_sequence: '',
-    output_suffix: ' </s><s>[INST] ',
-    stop_sequence: '</s>',
+  harmony: {
+    name: 'Harmony',
+    desc: 'OpenAI gpt-oss models (2025+)',
+    system_sequence: '<|start|>system<|message|>',
+    system_suffix: '<|end|>',
+    input_sequence: '<|start|>user<|message|>',
+    input_suffix: '<|end|>',
+    output_sequence: '<|start|>assistant<|message|>',
+    output_suffix: '<|end|>',
+    stop_sequence: '<|end|>',
   },
   llama3: {
-    name: 'Llama 3 Instruct',
+    name: 'Llama 3',
+    desc: 'Meta Llama 3, 3.1, 3.2, 3.3',
     system_sequence: '<|start_header_id|>system<|end_header_id|>\n\n',
     system_suffix: '<|eot_id|>',
     input_sequence: '<|start_header_id|>user<|end_header_id|>\n\n',
@@ -61,8 +39,42 @@ const FORMAT_PRESETS = {
     output_suffix: '<|eot_id|>',
     stop_sequence: '<|eot_id|>',
   },
+  gemma: {
+    name: 'Gemma 2',
+    desc: 'Google Gemma (no system role)',
+    system_sequence: '',
+    system_suffix: '',
+    input_sequence: '<start_of_turn>user\n',
+    input_suffix: '<end_of_turn>\n',
+    output_sequence: '<start_of_turn>model\n',
+    output_suffix: '<end_of_turn>\n',
+    stop_sequence: '<end_of_turn>',
+  },
+  mistral: {
+    name: 'Mistral',
+    desc: 'Mistral 7B, Mixtral',
+    system_sequence: '',
+    system_suffix: '\n\n',
+    input_sequence: '[INST] ',
+    input_suffix: ' [/INST]',
+    output_sequence: '',
+    output_suffix: '</s> ',
+    stop_sequence: '</s>',
+  },
+  llama2: {
+    name: 'Llama 2',
+    desc: 'Legacy Llama 2 Chat',
+    system_sequence: '[INST] <<SYS>>\n',
+    system_suffix: '\n<</SYS>>\n\n',
+    input_sequence: '',
+    input_suffix: ' [/INST] ',
+    output_sequence: '',
+    output_suffix: ' </s><s>[INST] ',
+    stop_sequence: '</s>',
+  },
   alpaca: {
     name: 'Alpaca',
+    desc: 'Stanford Alpaca style',
     system_sequence: '',
     system_suffix: '\n\n',
     input_sequence: '### Instruction:\n',
@@ -71,15 +83,16 @@ const FORMAT_PRESETS = {
     output_suffix: '\n\n',
     stop_sequence: '### Instruction:',
   },
-  mistral: {
-    name: 'Mistral Instruct',
-    system_sequence: '',
-    system_suffix: '\n\n',
-    input_sequence: '[INST] ',
-    input_suffix: ' [/INST]',
-    output_sequence: '',
-    output_suffix: '</s> ',
-    stop_sequence: '</s>',
+  commandr: {
+    name: 'Command-R',
+    desc: 'Cohere Command-R/R+',
+    system_sequence: '<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>',
+    system_suffix: '<|END_OF_TURN_TOKEN|>',
+    input_sequence: '<|START_OF_TURN_TOKEN|><|USER_TOKEN|>',
+    input_suffix: '<|END_OF_TURN_TOKEN|>',
+    output_sequence: '<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>',
+    output_suffix: '<|END_OF_TURN_TOKEN|>',
+    stop_sequence: '<|END_OF_TURN_TOKEN|>',
   },
 } as const;
 
@@ -152,24 +165,22 @@ export function PromptEngineeringInstructTab({
 
       {/* Quick Presets */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
-          <Sparkles className="h-4 w-4 text-violet-400" />
-          Quick Presets
-        </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="text-xs font-medium text-zinc-400">Quick Presets</div>
+        <div className="flex flex-wrap gap-1.5">
           {Object.entries(FORMAT_PRESETS).map(([key, format]) => (
             <button
               key={key}
               type="button"
               onClick={() => applyPreset(key as keyof typeof FORMAT_PRESETS)}
-              className="rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+              className="group rounded border border-zinc-700/60 bg-zinc-800/40 px-2 py-1 text-xs hover:bg-zinc-700 transition-colors"
+              title={format.desc}
             >
-              {format.name}
+              <span className="text-zinc-300">{format.name}</span>
             </button>
           ))}
         </div>
-        <p className="text-xs text-zinc-600">
-          Click a preset to populate the sequences below. Check your model's documentation for the correct format.
+        <p className="text-[10px] text-zinc-600">
+          Hover for model info. Click to apply. Verify against your model's docs.
         </p>
       </div>
 

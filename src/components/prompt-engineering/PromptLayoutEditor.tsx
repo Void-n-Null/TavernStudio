@@ -4,30 +4,40 @@ import { cn } from '../../lib/utils';
 import type { PromptLayout, PromptBlock, PromptBlockId } from '../../lib/promptLayout';
 import { reorderBlocks, toggleBlock } from '../../lib/promptLayout';
 
-/**
- * Color dot for block category - Notion-inspired minimal indicator
- */
-function getBlockDotColor(id: PromptBlockId): string {
+type BlockCategory = 'prompt' | 'character' | 'user' | 'lore' | 'dialogue';
+
+const CATEGORY_COLORS: Record<BlockCategory, string> = {
+  prompt: 'bg-violet-500',
+  character: 'bg-emerald-500',
+  user: 'bg-sky-500',
+  lore: 'bg-amber-500',
+  dialogue: 'bg-zinc-400',
+};
+
+function getBlockCategory(id: PromptBlockId): BlockCategory {
   switch (id) {
     case 'system_prompt':
     case 'post_history':
     case 'prefill':
-      return 'bg-violet-500';
+      return 'prompt';
     case 'char_description':
     case 'char_personality':
     case 'scenario':
-      return 'bg-emerald-500';
+      return 'character';
     case 'persona':
-      return 'bg-sky-500';
+      return 'user';
     case 'world_info_before':
     case 'world_info_after':
-      return 'bg-amber-500';
+      return 'lore';
     case 'example_dialogue':
     case 'chat_history':
-      return 'bg-zinc-400';
     default:
-      return 'bg-zinc-600';
+      return 'dialogue';
   }
+}
+
+function getBlockDotColor(id: PromptBlockId): string {
+  return CATEGORY_COLORS[getBlockCategory(id)];
 }
 
 interface PromptBlockRowProps {
@@ -62,6 +72,7 @@ function PromptBlockRow({
   canMoveDown,
 }: PromptBlockRowProps) {
   const isLocked = block.locked === true;
+  const dotColor = getBlockDotColor(block.id);
   
   return (
     <div
@@ -73,50 +84,49 @@ function PromptBlockRow({
         if (!isLocked) onDragOver();
       }}
       className={cn(
-        'group relative flex items-center gap-2 px-2 py-1.5 transition-all duration-200',
-        // Hover state with subtle lift effect
-        !isLocked && 'hover:bg-zinc-800/50 hover:translate-x-0.5',
+        'group relative flex items-center gap-3 px-3 py-2 transition-all duration-300',
+        'border-b border-zinc-800/40 last:border-0',
+        // Hover state
+        !isLocked && 'hover:bg-zinc-800/40',
         // Dragging state
-        isDragging && 'opacity-40 scale-[0.98] bg-violet-500/10',
+        isDragging && 'opacity-20 scale-[0.98] bg-zinc-800/30',
         // Drop target highlight
-        isDropTarget && !isLocked && 'ring-2 ring-violet-500/60 bg-violet-500/10 rounded-md',
+        isDropTarget && !isLocked && 'bg-zinc-800/40',
         // Disabled state
-        !block.enabled && 'opacity-40',
-        // Locked blocks have different styling
-        isLocked && 'bg-zinc-800/20 border-t border-zinc-700/50'
+        !block.enabled && 'bg-zinc-950/20',
+        // Locked blocks
+        isLocked && 'bg-zinc-900/40 border-l-2 border-l-zinc-700/50'
       )}
     >
-      {/* Checkbox for enable/disable - with pulse animation on change */}
-      <button
-        type="button"
-        onClick={() => onToggle(!block.enabled)}
-        className={cn(
-          'w-4 h-4 rounded border-2 transition-all duration-200 shrink-0',
-          'hover:scale-110 active:scale-95',
-          block.enabled
-            ? 'bg-violet-600 border-violet-600 shadow-sm shadow-violet-500/30'
-            : 'bg-transparent border-zinc-600 hover:border-zinc-400'
-        )}
-        title={block.enabled ? 'Enabled (click to disable)' : 'Disabled (click to enable)'}
-        aria-label={block.enabled ? 'Disable block' : 'Enable block'}
-      >
-        {block.enabled && (
-          <svg className="w-full h-full text-white" viewBox="0 0 16 16" fill="none">
-            <path d="M4 8l3 3 5-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </button>
+      {/* Checkbox for enable/disable */}
+      <div className="relative flex items-center justify-center shrink-0">
+        <button
+          type="button"
+          onClick={() => onToggle(!block.enabled)}
+          className={cn(
+            'w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center',
+            block.enabled
+              ? 'bg-zinc-600 border-zinc-500'
+              : 'bg-transparent border-zinc-700 hover:border-zinc-500'
+          )}
+          aria-label={block.enabled ? 'Disable block' : 'Enable block'}
+        >
+          {block.enabled && (
+            <div className="w-2 h-2 rounded-full bg-white" />
+          )}
+        </button>
+      </div>
 
       {/* Drag handle or lock icon */}
       {!isMobile && (
         <div className={cn(
-          'shrink-0 transition-all duration-200 w-4',
+          'shrink-0 transition-all duration-200 w-5 flex items-center justify-center',
           isLocked 
-            ? 'text-zinc-600' 
-            : 'cursor-grab active:cursor-grabbing text-zinc-700 opacity-0 group-hover:opacity-100 group-hover:text-zinc-400'
+            ? 'text-zinc-700' 
+            : 'cursor-grab active:cursor-grabbing text-zinc-800 group-hover:text-zinc-500'
         )}>
           {isLocked ? (
-            <Lock className="h-3 w-3" />
+            <Lock className="h-3.5 w-3.5" />
           ) : (
             <GripVertical className="h-4 w-4" />
           )}
@@ -124,48 +134,43 @@ function PromptBlockRow({
       )}
 
       {/* Color indicator dot with glow when enabled */}
-      <span className={cn(
-        'w-2 h-2 rounded-full shrink-0 transition-all duration-300',
-        getBlockDotColor(block.id),
-        block.enabled && 'shadow-sm',
-        block.enabled && block.id.includes('system') && 'shadow-violet-500/50',
-        block.enabled && block.id.includes('char') && 'shadow-emerald-500/50',
-        block.enabled && block.id.includes('persona') && 'shadow-sky-500/50',
-        block.enabled && block.id.includes('world') && 'shadow-amber-500/50',
-        !block.enabled && 'opacity-30'
-      )} />
+      <div className="relative shrink-0 w-3 flex items-center justify-center">
+        <span className={cn(
+          'w-2.5 h-2.5 rounded-full transition-all',
+          dotColor,
+          block.enabled ? 'opacity-100' : 'opacity-20 grayscale'
+        )} 
+        />
+      </div>
 
       {/* Block label */}
-      <span className={cn(
-        'flex-1 text-sm select-none transition-colors duration-200',
-        block.enabled ? 'text-zinc-200' : 'text-zinc-500',
-        isLocked && 'text-zinc-400 italic'
-      )}>
-        {block.label}
-        {isLocked && <span className="text-[10px] text-zinc-600 ml-1.5">(fixed)</span>}
-      </span>
+      <div className="flex-1 min-w-0">
+        <div className={cn(
+          'text-sm select-none transition-colors duration-300 font-medium truncate',
+          block.enabled ? 'text-zinc-200' : 'text-zinc-500',
+          isLocked && 'text-zinc-400 font-bold'
+        )}>
+          {block.label}
+          {isLocked && <span className="text-[9px] text-zinc-600 ml-2 font-black tracking-widest uppercase">IMMUTABLE</span>}
+        </div>
+      </div>
 
       {/* Position number */}
-      <span className={cn(
-        'text-[10px] tabular-nums w-5 text-right shrink-0 transition-colors',
-        isDropTarget ? 'text-violet-400' : 'text-zinc-600'
+      <div className={cn(
+        'text-[10px] font-black tabular-nums w-8 text-right shrink-0 transition-all opacity-20 group-hover:opacity-60 tracking-tighter',
+        isDropTarget ? 'text-zinc-300 opacity-100' : 'text-zinc-500'
       )}>
-        {index + 1}
-      </span>
+        #{index + 1}
+      </div>
 
-      {/* Mobile: arrow buttons (hidden for locked blocks) */}
+      {/* Mobile controls */}
       {isMobile && !isLocked && (
-        <div className="flex flex-col shrink-0 -my-1">
+        <div className="flex items-center gap-1 shrink-0 ml-2">
           <button
             type="button"
             onClick={onMoveUp}
             disabled={!canMoveUp}
-            className={cn(
-              'p-1 transition-all duration-150',
-              'disabled:opacity-20 disabled:cursor-not-allowed',
-              'text-zinc-500 hover:text-zinc-300 active:scale-90'
-            )}
-            aria-label="Move up"
+            className="p-1.5 rounded-md hover:bg-zinc-800 disabled:opacity-10 text-zinc-400"
           >
             <ChevronUp className="h-4 w-4" />
           </button>
@@ -173,21 +178,11 @@ function PromptBlockRow({
             type="button"
             onClick={onMoveDown}
             disabled={!canMoveDown}
-            className={cn(
-              'p-1 transition-all duration-150',
-              'disabled:opacity-20 disabled:cursor-not-allowed',
-              'text-zinc-500 hover:text-zinc-300 active:scale-90'
-            )}
-            aria-label="Move down"
+            className="p-1.5 rounded-md hover:bg-zinc-800 disabled:opacity-10 text-zinc-400"
           >
             <ChevronDown className="h-4 w-4" />
           </button>
         </div>
-      )}
-      
-      {/* Mobile: show lock for locked blocks */}
-      {isMobile && isLocked && (
-        <Lock className="h-3 w-3 text-zinc-600 shrink-0" />
       )}
     </div>
   );
@@ -242,30 +237,22 @@ export function PromptLayoutEditor({ layout, onChange, isMobile = false }: Promp
   const enabledCount = layout.blocks.filter(b => b.enabled).length;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 animate-in fade-in duration-700">
       {/* Compact legend */}
-      <div className="flex items-center gap-3 text-[10px] text-zinc-500">
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-violet-500" /> Prompts
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" /> Character
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-sky-500" /> User
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-amber-500" /> Lore
-        </span>
-        <span className="ml-auto text-zinc-600">
-          {enabledCount}/{layout.blocks.length} active
-        </span>
+      <div className="flex items-center justify-between gap-4 px-1 text-[10px]">
+        <div className="flex items-center gap-3">
+          <LegendItem color={CATEGORY_COLORS.prompt} label="Prompt" />
+          <LegendItem color={CATEGORY_COLORS.character} label="Character" />
+          <LegendItem color={CATEGORY_COLORS.user} label="User" />
+          <LegendItem color={CATEGORY_COLORS.lore} label="Lore" />
+          <LegendItem color={CATEGORY_COLORS.dialogue} label="Dialogue" />
+        </div>
+        <span className="text-zinc-600 tabular-nums">{enabledCount}/{layout.blocks.length}</span>
       </div>
 
       {/* Block list */}
-      <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 overflow-hidden">
+      <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/40 overflow-hidden shadow-2xl backdrop-blur-sm">
         {layout.blocks.map((block, index) => {
-          // Calculate if this block can move up/down (respecting locked blocks)
           const canMoveUp = index > 0 && !block.locked && !layout.blocks[index - 1]?.locked;
           const canMoveDown = index < layout.blocks.length - 1 && !block.locked && !layout.blocks[index + 1]?.locked;
           
@@ -289,11 +276,15 @@ export function PromptLayoutEditor({ layout, onChange, isMobile = false }: Promp
           );
         })}
       </div>
+    </div>
+  );
+}
 
-      {/* Minimal footer hint */}
-      <p className="text-[10px] text-zinc-600 text-center">
-        {isMobile ? 'Use arrows to reorder' : 'Drag to reorder'} · Empty blocks auto-skip
-      </p>
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className={cn('w-2 h-2 rounded-sm', color)} />
+      <span className="text-zinc-500">{label}</span>
     </div>
   );
 }

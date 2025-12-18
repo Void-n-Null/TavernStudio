@@ -1,31 +1,6 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Info } from 'lucide-react';
 import type { PromptEngineeringPreset } from '../../types/promptEngineering';
 import { MacroHighlightTextarea } from '../character-forge/MacroHighlightTextarea';
-import { PromptSectionTitle, createEmptySysprompt } from './promptEngineeringEditorShared';
-
-/** Expandable education section for each prompt field */
-function EducationPanel({ title, children }: { title: string; children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-zinc-800/50 bg-zinc-900/20">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
-      >
-        {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <Info className="h-3 w-3" />
-        <span>{title}</span>
-      </button>
-      {isOpen && (
-        <div className="px-3 pb-3 text-xs text-zinc-500 leading-relaxed space-y-2">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
+import { EducationPanel, PromptSectionTitle, createEmptySysprompt } from './promptEngineeringEditorShared';
 
 /** Check if a string has meaningful content (not just whitespace) */
 function hasContent(value: string | undefined): boolean {
