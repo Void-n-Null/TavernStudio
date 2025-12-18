@@ -102,3 +102,12 @@ export function shallowEqualEditorMessages(
   return true;
 }
 
+/**
+ * Quick character-count based token approximation.
+ * Roughly 1 token per 3.5 characters.
+ */
+export function calculateApproxTokens(texts: (string | undefined | null)[]): number {
+  const combined = texts.filter(Boolean).join('');
+  return Math.ceil(combined.length / 3.5);
+}
+
