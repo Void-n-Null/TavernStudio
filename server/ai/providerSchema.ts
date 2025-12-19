@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
 export type AuthStrategyType = 'apiKey' | 'pkce';
+export type ProviderTheme = 'light' | 'dark' | 'zinc' | 'violet' | 'blue' | 'orange' | 'cyan' | 'rose' | 'indigo';
 
 /**
  * Schema-driven description of how a provider is authenticated.
- *
- * IMPORTANT: even PKCE ultimately yields a stored API key for OpenRouter.
- * PKCE just changes *how the key is obtained* (oauth flow vs manual paste).
  */
 export type AuthStrategyDefinition = {
   id: string; // e.g. "apiKey", "pkce"
@@ -24,6 +22,17 @@ export type AuthStrategyDefinition = {
   requiredSecretKeys: string[];
 };
 
+/**
+ * Metadata for rendering the provider in the UI.
+ */
+export type AiProviderUiMetadata = {
+  logoUrl?: string; // Relative to public/
+  accentColor?: string; // Hex code or Tailwind color class
+  theme?: ProviderTheme;
+  description?: string;
+  defaultModelId?: string; // Sane default model to use when first configuring
+};
+
 export type AiProviderDefinition = {
   id: string; // "openrouter" | "openai" | "anthropic" | ...
   label: string;
@@ -32,6 +41,12 @@ export type AiProviderDefinition = {
    * Example: defaultModelId, baseURL, request options...
    */
   configSchema: z.ZodTypeAny;
+
+  /**
+   * Visual and descriptive metadata for the UI.
+   */
+  ui?: AiProviderUiMetadata;
+
   /**
    * How this provider can be authenticated.
    * Most providers will have one. OpenRouter can support both apiKey and pkce.
@@ -43,6 +58,17 @@ export type AiProviderDefinition = {
    * Can be static or dynamic (calling the provider API if connected).
    */
   listModels?: (secrets: Record<string, string>) => Promise<{ id: string; label: string }[]>;
+
+  /**
+   * Factory for the AI SDK provider instance.
+   * This is called when connecting to store the client in the server cache.
+   */
+  createClient: (secrets: Record<string, string>, config: any) => any;
+
+  /**
+   * Optional validation logic. If it throws, the connection is considered failed.
+   */
+  validate?: (secrets: Record<string, string>, config: any) => Promise<void>;
 };
 
 export type ProviderId = AiProviderDefinition['id'];
