@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { defaultChat } from '../../../api/client';
+import { defaultChat } from '../../../api/misc';
 import type { ChatNode, Speaker } from '../../../types/chat';
 import { useChat } from './queries';
 import { useAddMessage, useDeleteMessage, useEditMessage, useSwitchBranch } from './mutations';

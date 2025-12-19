@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryClient';
-import { settings } from '../../api/client';
+import { settings } from '../../api/settings';
 import type { MessageStyleConfig } from '../../types/messageStyle';
 
 // ============ Queries ============

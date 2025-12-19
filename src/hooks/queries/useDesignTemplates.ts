@@ -5,7 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { designTemplates, type DesignTemplate, type CreateTemplateInput } from '../../api/client';
+import { designTemplates, type DesignTemplate, type CreateTemplateInput } from '../../api/misc';
 
 // Query keys
 export const templateKeys = {

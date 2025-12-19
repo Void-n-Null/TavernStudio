@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { settings } from '../../api/client';
+import { settings } from '../../api/settings';
 import { queryKeys } from '../../lib/queryClient';
 import type { PromptEngineeringPreset, PromptEngineeringStore } from '../../types/promptEngineering';
 import {

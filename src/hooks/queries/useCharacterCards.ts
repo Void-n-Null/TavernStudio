@@ -3,9 +3,8 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { CharacterCardRecord, CharacterCardRecordMeta } from '../../types/characterCard';
-
-const API_BASE = '/api/character-cards';
+import type { CharacterCardRecordMeta } from '../../types/characterCard';
+import { characterCards } from '../../api/characterCards';
 
 // ============ Query Keys ============
 export const characterCardKeys = {
@@ -20,11 +19,7 @@ export const characterCardKeys = {
 export function useCharacterCards() {
   return useQuery({
     queryKey: characterCardKeys.list(),
-    queryFn: async (): Promise<CharacterCardRecordMeta[]> => {
-      const res = await fetch(API_BASE);
-      if (!res.ok) throw new Error('Failed to fetch character cards');
-      return res.json();
-    },
+    queryFn: () => characterCards.list(),
     staleTime: 30_000,
   });
 }
@@ -34,18 +29,8 @@ export function useUpdateCardTokenCount() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, token_count }: { id: string; token_count: number }): Promise<{ success: boolean; token_count: number; token_count_updated_at: number }> => {
-      const res = await fetch(`${API_BASE}/${id}/token-count`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token_count }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to update token count');
-      }
-      return res.json();
-    },
+    mutationFn: ({ id, token_count }: { id: string; token_count: number }) =>
+      characterCards.updateTokenCount(id, token_count),
     onSuccess: (data, variables) => {
       queryClient.setQueryData<CharacterCardRecordMeta[] | undefined>(characterCardKeys.list(), (prev) => {
         if (!prev) return prev;
@@ -63,11 +48,9 @@ export function useUpdateCardTokenCount() {
 export function useCharacterCard(id: string | null) {
   return useQuery({
     queryKey: id ? characterCardKeys.detail(id) : ['null'],
-    queryFn: async (): Promise<CharacterCardRecord> => {
+    queryFn: () => {
       if (!id) throw new Error('No card ID provided');
-      const res = await fetch(`${API_BASE}/${id}`);
-      if (!res.ok) throw new Error('Failed to fetch character card');
-      return res.json();
+      return characterCards.get(id);
     },
     enabled: !!id,
     staleTime: 30_000,
@@ -79,18 +62,7 @@ export function useCreateCharacterCard() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (card: Record<string, unknown>): Promise<CharacterCardRecord> => {
-      const res = await fetch(API_BASE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(card),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to create character card');
-      }
-      return res.json();
-    },
+    mutationFn: (card: Record<string, unknown>) => characterCards.create(card),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: characterCardKeys.lists() });
     },
@@ -102,18 +74,8 @@ export function useUpdateCharacterCard() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, card }: { id: string; card: Record<string, unknown> }): Promise<CharacterCardRecord> => {
-      const res = await fetch(`${API_BASE}/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(card),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to update character card');
-      }
-      return res.json();
-    },
+    mutationFn: ({ id, card }: { id: string; card: Record<string, unknown> }) =>
+      characterCards.update(id, card),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: characterCardKeys.lists() });
       queryClient.invalidateQueries({ queryKey: characterCardKeys.detail(data.id) });
@@ -126,20 +88,8 @@ export function useUpdateCardAvatar() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, file }: { id: string; file: File }): Promise<{ success: boolean; png_sha256: string }> => {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const res = await fetch(`${API_BASE}/${id}/avatar`, {
-        method: 'PATCH',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to update avatar');
-      }
-      return res.json();
-    },
+    mutationFn: ({ id, file }: { id: string; file: File }) =>
+      characterCards.updateAvatar(id, file),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: characterCardKeys.lists() });
       queryClient.invalidateQueries({ queryKey: characterCardKeys.detail(variables.id) });
@@ -152,14 +102,7 @@ export function useDeleteCardAvatar() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string): Promise<{ success: boolean }> => {
-      const res = await fetch(`${API_BASE}/${id}/avatar`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to remove avatar');
-      }
-      return res.json();
-    },
+    mutationFn: (id: string) => characterCards.deleteAvatar(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: characterCardKeys.lists() });
       queryClient.invalidateQueries({ queryKey: characterCardKeys.detail(id) });
@@ -172,16 +115,7 @@ export function useDeleteCharacterCard() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (id: string): Promise<{ success: boolean; deleted: string }> => {
-      const res = await fetch(`${API_BASE}/${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to delete character card');
-      }
-      return res.json();
-    },
+    mutationFn: (id: string) => characterCards.delete(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: characterCardKeys.lists() });
       queryClient.removeQueries({ queryKey: characterCardKeys.detail(id) });
@@ -194,20 +128,7 @@ export function useImportPngCard() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (file: File): Promise<CharacterCardRecord> => {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const res = await fetch(`${API_BASE}/import/png`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to import PNG');
-      }
-      return res.json();
-    },
+    mutationFn: (file: File) => characterCards.importPng(file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: characterCardKeys.lists() });
     },
@@ -219,18 +140,7 @@ export function useImportJsonCard() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (json: Record<string, unknown>): Promise<CharacterCardRecord> => {
-      const res = await fetch(`${API_BASE}/import/json`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(json),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || 'Failed to import JSON');
-      }
-      return res.json();
-    },
+    mutationFn: (json: Record<string, unknown>) => characterCards.importJson(json),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: characterCardKeys.lists() });
     },
@@ -239,19 +149,17 @@ export function useImportJsonCard() {
 
 // ============ Helpers ============
 export function getAvatarUrl(id: string): string {
-  return `${API_BASE}/${id}/avatar`;
+  return `/api${characterCards.getAvatarUrl(id)}`;
 }
 
 export function getAvatarUrlVersioned(id: string, version?: string | null): string {
-  // Bust browser cache when the underlying blob changes (sha changes on update).
-  return version ? `${API_BASE}/${id}/avatar?v=${encodeURIComponent(version)}` : `${API_BASE}/${id}/avatar`;
+  return `/api${characterCards.getAvatarUrl(id, version)}`;
 }
 
 export function getExportPngUrl(id: string): string {
-  return `${API_BASE}/${id}/export/png`;
+  return `/api${characterCards.getExportPngUrl(id)}`;
 }
 
 export function getExportJsonUrl(id: string): string {
-  return `${API_BASE}/${id}/export/json`;
+  return `/api${characterCards.getExportJsonUrl(id)}`;
 }
-

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryClient';
-import { profiles } from '../../../api/client';
+import { profiles } from '../../../api/profiles';
 import type { Profile, ProfileMeta, CreateProfileRequest, UpdateProfileRequest } from '../../../types/profile';
 
 // ============ Mutations ============

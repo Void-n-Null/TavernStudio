@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryClient';
-import { profiles } from '../../../api/client';
+import { profiles } from '../../../api/profiles';
 
 // ============ Queries ============
 

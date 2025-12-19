@@ -1,6 +1,6 @@
                             import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryClient';
-import { chats } from '../../../api/client';
+import { chats } from '../../../api/chats';
 import type { ChatNode, Speaker } from '../../../types/chat';
 import { useDefaultChatId } from './defaultChat';
 

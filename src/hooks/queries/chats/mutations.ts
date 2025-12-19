@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryClient';
-import { chats, type ChatMeta, type ChatFull } from '../../../api/client';
+import { chats, type ChatMeta, type ChatFull } from '../../../api/chats';
 import type { ChatNode } from '../../../types/chat';
 
 export function useCreateChat() {

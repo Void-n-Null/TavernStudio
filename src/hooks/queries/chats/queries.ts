@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryClient';
-import { chats } from '../../../api/client';
+import { chats } from '../../../api/chats';
 
 export function useChatList() {
   return useQuery({

@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryClient';
-import { speakers } from '../../api/client';
+import { speakers } from '../../api/misc';
 import type { Speaker } from '../../types/chat';
 
 // ============ Queries ============
