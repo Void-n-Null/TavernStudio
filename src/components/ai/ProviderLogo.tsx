@@ -67,6 +67,7 @@ interface ProviderLogoProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   selected?: boolean;
+  minimal?: boolean;
 }
 
 export function ProviderLogo({ 
@@ -75,12 +76,13 @@ export function ProviderLogo({
   size = 'md',
   className,
   selected = false,
+  minimal = false,
 }: ProviderLogoProps) {
   const fetchedUi = useProviderUi(provider);
   const ui = providedUi || fetchedUi;
   
   const sizeClasses = {
-    sm: 'h-6 w-6 p-1',
+    sm: minimal ? 'h-4 w-4' : 'h-6 w-6 p-1',
     md: 'h-11 w-11 p-2',
     lg: 'h-14 w-14 p-2.5',
   };
@@ -92,10 +94,8 @@ export function ProviderLogo({
   let forcedColorClass = "bg-white"; // Default for OpenAI/OpenRouter
   
   if (ui?.accentColor) {
-    // If it's a hex color, we can't easily use it as a Tailwind class
-    // but we can check if it starts with #
     if (ui.accentColor.startsWith('#')) {
-      forcedColorClass = ""; // We'll handle via style if needed, or just let it be
+      forcedColorClass = ""; 
     } else {
       forcedColorClass = `bg-${ui.accentColor}`;
     }
@@ -107,17 +107,22 @@ export function ProviderLogo({
     }
   }
 
+  // If a bg- class is passed in className, we should apply it to the mask div
+  const colorClass = className?.split(' ').find(c => c.startsWith('bg-'));
+  const otherClasses = className?.split(' ').filter(c => !c.startsWith('bg-')).join(' ');
+
   return (
     <div className={cn(
-      'rounded-xl flex items-center justify-center border shrink-0 transition-colors',
+      !minimal && 'rounded-xl border shrink-0 transition-colors',
+      !minimal && (selected ? 'bg-violet-500/20 border-violet-500/30' : getProviderBgStyle(provider, ui)),
+      minimal && 'shrink-0 flex items-center justify-center',
       sizeClasses[size],
-      selected ? 'bg-violet-500/20 border-violet-500/30' : getProviderBgStyle(provider, ui),
-      className
+      otherClasses
     )}>
       <div 
-        className={cn("w-full h-full", forcedColorClass)}
+        className={cn("w-full h-full", colorClass || forcedColorClass)}
         style={{
-          backgroundColor: ui?.accentColor?.startsWith('#') ? ui.accentColor : undefined,
+          backgroundColor: !colorClass && ui?.accentColor?.startsWith('#') ? ui.accentColor : undefined,
           maskImage: `url(${logoUrl})`,
           WebkitMaskImage: `url(${logoUrl})`,
           maskRepeat: 'no-repeat',

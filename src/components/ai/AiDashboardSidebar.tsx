@@ -4,9 +4,10 @@
  * Sidebar navigation for the AI Dashboard, including provider selection.
  */
 
-import { Plug, Cpu, DollarSign, ScrollText, ChevronRight, Zap } from 'lucide-react';
+import { Plug, Cpu, DollarSign, ScrollText, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AiProviderStatus } from '../../api/ai';
+import { ProviderLogo } from './ProviderLogo';
 
 export type AiTabId = 'providers' | 'models' | 'costs' | 'logs';
 
@@ -66,7 +67,13 @@ export function AiDashboardSidebar({
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    <Zap className={cn('h-4 w-4', activeProviderId === p.id ? 'text-violet-400' : 'text-zinc-600')} />
+                    <ProviderLogo 
+                      provider={p.id} 
+                      ui={p.ui}
+                      minimal 
+                      size="sm" 
+                      className={cn(activeProviderId === p.id ? 'bg-violet-400' : 'bg-zinc-600')} 
+                    />
                     <span className="font-medium">{p.label}</span>
                   </div>
                 </button>
@@ -124,7 +131,12 @@ export function AiDashboardSidebar({
           className="p-4 border-t border-zinc-800/50 bg-zinc-950/80 hover:bg-zinc-900 transition-colors text-left"
         >
           <div className="flex items-center gap-3">
-            <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <ProviderLogo 
+              provider={activeProvider.id} 
+              ui={activeProvider.ui}
+              size="sm" 
+              className="shadow-[0_0_8px_rgba(167,139,250,0.2)]" 
+            />
             <div className="min-w-0 flex-1">
               <div className="text-[10px] uppercase text-zinc-500 font-bold tracking-tight">
                 Currently Using
