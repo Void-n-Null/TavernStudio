@@ -19,5 +19,26 @@ export const anthropicProvider: AiProviderDefinition = {
       requiredSecretKeys: ['apiKey'],
     },
   ],
+  listModels: async (secrets) => {
+    if (!secrets.apiKey) return [];
+
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        'x-api-key': secrets.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+    });
+
+    if (!res.ok) {
+      console.error(`[anthropic] Failed to fetch models: ${res.status} ${res.statusText}`);
+      return [];
+    }
+
+    const data = await res.json() as { data: Array<{ id: string; display_name?: string }> };
+    return data.data.map((m) => ({
+      id: m.id,
+      label: m.display_name || m.id,
+    }));
+  },
 };
 

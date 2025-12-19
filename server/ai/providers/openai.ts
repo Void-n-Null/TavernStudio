@@ -21,5 +21,25 @@ export const openAIProvider: AiProviderDefinition = {
       requiredSecretKeys: ['apiKey'],
     },
   ],
+  listModels: async (secrets) => {
+    if (!secrets.apiKey) return [];
+
+    const res = await fetch('https://api.openai.com/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${secrets.apiKey}`,
+      },
+    });
+
+    if (!res.ok) {
+      console.error(`[openai] Failed to fetch models: ${res.status} ${res.statusText}`);
+      return [];
+    }
+
+    const data = await res.json() as { data: Array<{ id: string; owned_by: string }> };
+    return data.data.map((m) => ({
+      id: m.id,
+      label: m.id, // OpenAI doesn't provide display names
+    }));
+  },
 };
 

@@ -37,6 +37,12 @@ export type AiProviderDefinition = {
    * Most providers will have one. OpenRouter can support both apiKey and pkce.
    */
   authStrategies: AuthStrategyDefinition[];
+
+  /**
+   * List models available for this provider.
+   * Can be static or dynamic (calling the provider API if connected).
+   */
+  listModels?: (secrets: Record<string, string>) => Promise<{ id: string; label: string }[]>;
 };
 
 export type ProviderId = AiProviderDefinition['id'];
