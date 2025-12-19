@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { openRouterModels, aiProviders, type OpenRouterModel } from '../../../api/client';
-import { queryKeys } from '../../../lib/queryClient';
-import { addToRecentModels } from '../QuickActionsBar';
+import { openRouterModels, aiProviders, type OpenRouterModel } from '../../../../api/client';
+import { queryKeys } from '../../../../lib/queryClient';
+import { addToRecentModels } from '../../QuickActionsBar';
 
 export interface UseModelsTabProps {
   activeProviderId?: string | null;
@@ -51,38 +51,40 @@ export function useModelsTab({ activeProviderId }: UseModelsTabProps) {
     const pModels = providerModelsData ?? [];
 
     if (activeProviderId && activeProviderId !== 'openrouter' && pModels.length > 0) {
-      return pModels.map(pm => {
-        const cleanedPmId = cleanModelId(pm.id);
-        
-        const match = orModels.find(om => {
-          if (om.slug === pm.id) return true;
-          if (om.slug === `${activeProviderId}/${pm.id}`) return true;
-          if (om.slug.endsWith(`/${pm.id}`)) return true;
+      return pModels
+        .map(pm => {
+          const cleanedPmId = cleanModelId(pm.id);
           
-          const omModelPart = om.slug.split('/').pop() || om.slug;
-          const cleanedOmId = cleanModelId(omModelPart);
-          return cleanedOmId === cleanedPmId;
-        });
+          const match = orModels.find(om => {
+            if (om.slug === pm.id) return true;
+            if (om.slug === `${activeProviderId}/${pm.id}`) return true;
+            if (om.slug.endsWith(`/${pm.id}`)) return true;
+            
+            const omModelPart = om.slug.split('/').pop() || om.slug;
+            const cleanedOmId = cleanModelId(omModelPart);
+            return cleanedOmId === cleanedPmId;
+          });
 
-        if (match) {
-          return { ...match, name: pm.label || match.name };
-        }
+          if (match) {
+            return { ...match, name: pm.label || match.name };
+          }
 
-        return {
-          slug: `${activeProviderId}/${pm.id}`,
-          name: pm.label,
-          short_name: pm.label,
-          author: activeProviderId,
-          description: '',
-          context_length: 128000,
-          input_modalities: ['text'],
-          output_modalities: ['text'],
-          group: activeProviderId,
-          supports_reasoning: false,
-          hidden: false,
-          permaslug: pm.id,
-        } as OpenRouterModel;
-      });
+          return {
+            slug: `${activeProviderId}/${pm.id}`,
+            name: pm.label,
+            short_name: pm.label,
+            author: activeProviderId,
+            description: '',
+            context_length: 128000,
+            input_modalities: ['text'],
+            output_modalities: ['text'],
+            group: activeProviderId,
+            supports_reasoning: false,
+            hidden: false,
+            permaslug: pm.id,
+          } as OpenRouterModel;
+        })
+        .filter(m => !m.endpoint?.is_free);
     }
 
     return orModels;
