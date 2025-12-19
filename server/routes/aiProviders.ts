@@ -31,6 +31,7 @@ aiProviderRoutes.get('/', (c) => {
     return {
       id: p.id,
       label: p.label,
+      ui: p.ui,
       config: parsedConfig.success ? parsedConfig.data : null,
       configValid: parsedConfig.success,
       authStrategies: strategies,

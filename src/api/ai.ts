@@ -11,9 +11,18 @@ export type AiProviderAuthStrategyStatus = {
   requiredKeys: string[];
 };
 
+export type AiProviderUiMetadata = {
+  logoUrl?: string;
+  accentColor?: string;
+  theme?: 'light' | 'dark' | 'zinc' | 'violet' | 'blue' | 'orange' | 'cyan' | 'rose' | 'indigo';
+  description?: string;
+  defaultModelId?: string;
+};
+
 export type AiProviderStatus = {
   id: string;
   label: string;
+  ui?: AiProviderUiMetadata;
   config: unknown | null;
   configValid: boolean;
   authStrategies: AiProviderAuthStrategyStatus[];
