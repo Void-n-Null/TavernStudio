@@ -21,9 +21,10 @@ export function ActiveModelDashboard({
   };
 
   const formatPrice = (price: string | number | undefined) => {
-    if (!price) return 'Free';
+    if (price === undefined || price === null) return '—';
     const p = typeof price === 'string' ? parseFloat(price) : price;
-    if (p === 0 || isNaN(p)) return 'Free';
+    if (p === 0) return 'Free';
+    if (isNaN(p)) return '—';
     const perMillion = p * 1_000_000;
     if (perMillion < 0.01) return '<$0.01/M';
     return `$${perMillion.toFixed(2)}/M`;

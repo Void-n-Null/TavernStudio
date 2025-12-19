@@ -30,9 +30,10 @@ function formatContextLength(length: number): string {
 
 // Format pricing for display (price per 1M tokens)
 function formatPrice(priceStr: string | number | undefined): string {
-  if (!priceStr) return '—';
+  if (priceStr === undefined || priceStr === null) return '—';
   const price = typeof priceStr === 'string' ? parseFloat(priceStr) : priceStr;
-  if (price === 0 || isNaN(price)) return 'Free';
+  if (price === 0) return 'Free';
+  if (isNaN(price)) return '—';
   const perMillion = price * 1000000;
   if (perMillion < 0.01) return '<$0.01';
   return `$${perMillion.toFixed(2)}`;
@@ -100,41 +101,43 @@ export function ModelSelector({ value, onChange, className, providerId }: ModelS
     const pModels = providerModelsData ?? [];
 
     if (providerId && providerId !== 'openrouter' && pModels.length > 0) {
-      return pModels.map(pm => {
-        const cleanedPmId = cleanModelId(pm.id);
-        
-        // Try to find matching model in OpenRouter catalog
-        const match = orModels.find(om => {
-          // Exact matches
-          if (om.slug === pm.id) return true;
-          if (om.slug === `${providerId}/${pm.id}`) return true;
-          if (om.slug.endsWith(`/${pm.id}`)) return true;
+      return pModels
+        .map(pm => {
+          const cleanedPmId = cleanModelId(pm.id);
           
-          // Fuzzy match: clean both IDs and compare
-          const omModelPart = om.slug.split('/').pop() || om.slug;
-          const cleanedOmId = cleanModelId(omModelPart);
-          return cleanedOmId === cleanedPmId;
-        });
+          // Try to find matching model in OpenRouter catalog
+          const match = orModels.find(om => {
+            // Exact matches
+            if (om.slug === pm.id) return true;
+            if (om.slug === `${providerId}/${pm.id}`) return true;
+            if (om.slug.endsWith(`/${pm.id}`)) return true;
+            
+            // Fuzzy match: clean both IDs and compare
+            const omModelPart = om.slug.split('/').pop() || om.slug;
+            const cleanedOmId = cleanModelId(omModelPart);
+            return cleanedOmId === cleanedPmId;
+          });
 
-        if (match) {
-          return { ...match, name: pm.label || match.name };
-        }
+          if (match) {
+            return { ...match, name: pm.label || match.name };
+          }
 
-        return {
-          slug: pm.id.includes('/') ? pm.id : `${providerId}/${pm.id}`,
-          name: pm.label,
-          short_name: pm.label,
-          author: providerId,
-          description: '',
-          context_length: 128000,
-          input_modalities: ['text'],
-          output_modalities: ['text'],
-          group: providerId,
-          supports_reasoning: false,
-          hidden: false,
-          permaslug: pm.id,
-        } as OpenRouterModel;
-      });
+          return {
+            slug: pm.id.includes('/') ? pm.id : `${providerId}/${pm.id}`,
+            name: pm.label,
+            short_name: pm.label,
+            author: providerId,
+            description: '',
+            context_length: 128000,
+            input_modalities: ['text'],
+            output_modalities: ['text'],
+            group: providerId,
+            supports_reasoning: false,
+            hidden: false,
+            permaslug: pm.id,
+          } as OpenRouterModel;
+        })
+        .filter(m => !m.endpoint?.is_free);
     }
 
     return orModels;
@@ -244,7 +247,11 @@ export function ModelSelector({ value, onChange, className, providerId }: ModelS
               )}
             </div>
             <div className="text-[10px] text-zinc-500 truncate">
-              {formatContextLength(model.context_length)} ctx • {formatPrice(model.endpoint?.pricing?.prompt)}/M
+              {model.endpoint ? (
+                <>{formatContextLength(model.context_length)} ctx • {formatPrice(model.endpoint?.pricing?.prompt)}/M</>
+              ) : (
+                'Metadata not available'
+              )}
             </div>
           </div>
         </button>
@@ -321,23 +328,25 @@ export function ModelSelector({ value, onChange, className, providerId }: ModelS
           )}
         </div>
 
-            {/* Quick filters */}
-            <div className="flex gap-1.5 mt-2 flex-wrap">
-              {['openai', 'anthropic', 'google', 'meta'].map(p => (
-          <button
-                  key={p}
-                  onClick={() => setProviderFilter(providerFilter === p ? null : p)}
-            className={cn(
-                    'rounded px-2 py-0.5 text-[10px] font-medium transition-colors capitalize',
-                    providerFilter === p
-                      ? 'bg-violet-500/20 text-violet-300'
-                      : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-400'
-              )}
-            >
-                  {p}
-            </button>
-          ))}
-        </div>
+            {/* Quick filters - Only show for OpenRouter */}
+            {(providerId === 'openrouter' || !providerId) && (
+              <div className="flex gap-1.5 mt-2 flex-wrap">
+                {['openai', 'anthropic', 'google', 'meta'].map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setProviderFilter(providerFilter === p ? null : p)}
+                    className={cn(
+                      'rounded px-2 py-0.5 text-[10px] font-medium transition-colors capitalize',
+                      providerFilter === p
+                        ? 'bg-violet-500/20 text-violet-300'
+                        : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-400'
+                    )}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
       </div>
 
           {/* Virtualized list */}

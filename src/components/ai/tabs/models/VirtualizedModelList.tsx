@@ -52,9 +52,10 @@ export function VirtualizedModelList({
     };
 
     const formatPrice = (price: string | number | undefined) => {
-      if (!price) return 'Free';
+      if (price === undefined || price === null) return '—';
       const p = typeof price === 'string' ? parseFloat(price) : price;
-      if (p === 0 || isNaN(p)) return 'Free';
+      if (p === 0) return 'Free';
+      if (isNaN(p)) return '—';
       const perMillion = p * 1_000_000;
       if (perMillion < 0.01) return '<$0.01';
       return `$${perMillion.toFixed(2)}`;
@@ -89,9 +90,15 @@ export function VirtualizedModelList({
             <div className="flex items-center gap-3 text-[11px] text-zinc-500">
               <span className="font-medium">{provider}</span>
               <span className="text-zinc-700">•</span>
-              <span>{formatContext(model.context_length)} ctx</span>
-              <span className="text-zinc-700">•</span>
-              <span>{formatPrice(model.endpoint?.pricing?.prompt)}/M</span>
+              {model.endpoint ? (
+                <>
+                  <span>{formatContext(model.context_length)} ctx</span>
+                  <span className="text-zinc-700">•</span>
+                  <span>{formatPrice(model.endpoint?.pricing?.prompt)}/M</span>
+                </>
+              ) : (
+                <span>Metadata not available</span>
+              )}
             </div>
           </div>
 
