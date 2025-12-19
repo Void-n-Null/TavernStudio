@@ -24,6 +24,7 @@ type Options = {
   top: number;
   all: boolean;
   minScore: number;
+  file?: string;
 };
 
 function parseArgs(argv: string[]): Partial<Options> {
@@ -57,9 +58,15 @@ function parseArgs(argv: string[]): Partial<Options> {
       continue;
     }
 
+    if (a === '--file' || a === '-f') {
+      out.file = argv[i + 1] ?? out.file;
+      i += 1;
+      continue;
+    }
+
     if (a === '--help' || a === '-h') {
       // eslint-disable-next-line no-console
-      console.log(`\nDivide or be Conquered Tierlist\n\nUsage:\n  bun run scripts/divide-or-be-conquered-tierlist.ts [options]\n\nOptions:\n  --root, -r <dir>       Root directory to scan (default: src)\n  --top, -t <n>          Show top N files (default: 25)\n  --all                  Print all matching files (ignores --top)\n  --min-score <n>        Only show files with score >= n (default: 0)\n`);
+      console.log(`\nDivide or be Conquered Tierlist\n\nUsage:\n  bun run scripts/divide-or-be-conquered-tierlist.ts [options]\n\nOptions:\n  --root, -r <dir>       Root directory to scan (default: src)\n  --top, -t <n>          Show top N files (default: 25)\n  --all                  Print all matching files (ignores --top)\n  --min-score <n>        Only show files with score >= n (default: 0)\n  --file, -f <path>      Target a specific file or pattern\n`);
       process.exit(0);
     }
   }
@@ -253,6 +260,43 @@ async function analyzeFile(repoRootAbs: string, fileAbs: string): Promise<FileMe
   };
 }
 
+function getFlavorText(m: FileMetrics): string[] {
+  const flavor: string[] = [];
+
+  const monolithJokes = [
+    "🚨 MONOLITH ALERT 🚨",
+    "This file has become too powerful. It must be destroyed.",
+    "The Roman Empire fell. So will this component.",
+    "'Why does my file have its own zip code?'",
+    "This component leaves me In search of the time I've lost. (wink wink nudge nudge)",
+    "PRAISE THE MONOLITH. ALL HAIL THE MONOLITH"
+  ];
+
+  const trenchJokes = [
+    "TRENCH WARFARE DETECTED",
+    "The component is doing WW1 reenactment.",
+    "Soldiers died for less nesting than this.",
+    "No one's making it out of this <div> alive.",
+    "3 generations of robins have raised their eggs in this component!",
+    "Inception? More like runtime exception!"
+  ];
+
+  const homeDepotJokes = [
+    "This isn't a module, this is a home depot",
+    "\"If I have to leave this file, even for a moment? I'll die... I must keep everything here\"",
+    "\"My great grandfather started this file, My grandfather wrote code here, My father wrote code here, and god damn it.... I WILL WRITE CODE HERE!\"",
+    "The lack of separations.... has me concerned...."
+  ];
+
+  const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+  if (m.nonEmptyLines >= 800) flavor.push(getRandom(monolithJokes));
+  if (m.jsxMaxDepth >= 12) flavor.push(getRandom(trenchJokes));
+  if (m.functionLikeCount >= 30) flavor.push(getRandom(homeDepotJokes));
+
+  return flavor;
+}
+
 async function main(): Promise<void> {
   const repoRootAbs = process.cwd();
 
@@ -270,7 +314,12 @@ async function main(): Promise<void> {
 
   const rootAbs = path.isAbsolute(opts.rootDir) ? opts.rootDir : path.join(repoRootAbs, opts.rootDir);
 
-  const files = await collectFiles(rootAbs, opts.include, opts.exclude);
+  let files = await collectFiles(rootAbs, opts.include, opts.exclude);
+
+  if (opts.file) {
+    const filter = opts.file.toLowerCase();
+    files = files.filter(f => f.toLowerCase().includes(filter));
+  }
 
   const results: FileMetrics[] = [];
   for (const f of files) {
@@ -304,6 +353,12 @@ async function main(): Promise<void> {
     if (r.notes.length > 0) {
       // eslint-disable-next-line no-console
       console.log(`    - ${r.notes.join(' | ')}`);
+    }
+
+    const flavors = getFlavorText(r);
+    for (const f of flavors) {
+      // eslint-disable-next-line no-console
+      console.log(`    💡 ${f}`);
     }
   }
 
