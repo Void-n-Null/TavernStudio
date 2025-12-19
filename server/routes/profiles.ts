@@ -324,6 +324,156 @@ profileRoutes.patch('/:id', async (c) => {
   return c.json(rowToProfile(updated));
 });
 
+// ============ Add AI config to profile ============
+profileRoutes.post('/:id/ai-configs', async (c) => {
+  const profileId = c.req.param('id');
+  const body = await c.req.json<{
+    name: string;
+    providerId: string;
+    authStrategyId: string;
+    modelId: string;
+    params?: Record<string, unknown>;
+    providerConfig?: Record<string, unknown>;
+    isDefault?: boolean;
+  }>();
+
+  const existing = prepare<ProfileRow>('SELECT * FROM profiles WHERE id = ?').get(profileId) as ProfileRow | null;
+  if (!existing) {
+    return c.json({ error: 'Profile not found' }, 404);
+  }
+
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  const isDefault = body.isDefault ?? false;
+
+  transaction(() => {
+    if (isDefault) {
+      prepare('UPDATE profile_ai_configs SET is_default = 0 WHERE profile_id = ?').run(profileId);
+    }
+
+    prepare(`
+      INSERT INTO profile_ai_configs
+        (id, profile_id, name, provider_id, auth_strategy_id, model_id, params_json, provider_config_json, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      profileId,
+      body.name,
+      body.providerId,
+      body.authStrategyId,
+      body.modelId,
+      JSON.stringify(body.params ?? {}),
+      JSON.stringify(body.providerConfig ?? {}),
+      isDefault ? 1 : 0,
+      now,
+      now
+    );
+
+    if (isDefault) {
+      prepare('UPDATE profiles SET active_ai_config_id = ?, updated_at = ? WHERE id = ?').run(id, now, profileId);
+    }
+  });
+
+  const row = prepare<AiConfigRow>('SELECT * FROM profile_ai_configs WHERE id = ?').get(id) as AiConfigRow;
+  return c.json(rowToAiConfig(row), 201);
+});
+
+// ============ Update AI config in profile ============
+profileRoutes.patch('/:id/ai-configs/:configId', async (c) => {
+  const { id: profileId, configId } = c.req.param();
+  const body = await c.req.json<{
+    name?: string;
+    modelId?: string;
+    authStrategyId?: string;
+    params?: Record<string, unknown>;
+    providerConfig?: Record<string, unknown>;
+    isDefault?: boolean;
+  }>();
+
+  const existing = prepare<AiConfigRow>('SELECT * FROM profile_ai_configs WHERE id = ? AND profile_id = ?')
+    .get(configId, profileId) as AiConfigRow | null;
+  
+  if (!existing) {
+    return c.json({ error: 'AI config not found' }, 404);
+  }
+
+  const now = Date.now();
+  const updates: string[] = ['updated_at = ?'];
+  const values: (string | number)[] = [now];
+
+  if (body.name !== undefined) {
+    updates.push('name = ?');
+    values.push(body.name);
+  }
+  if (body.modelId !== undefined) {
+    updates.push('model_id = ?');
+    values.push(body.modelId);
+  }
+  if (body.authStrategyId !== undefined) {
+    updates.push('auth_strategy_id = ?');
+    values.push(body.authStrategyId);
+  }
+  if (body.params !== undefined) {
+    updates.push('params_json = ?');
+    values.push(JSON.stringify(body.params));
+  }
+  if (body.providerConfig !== undefined) {
+    updates.push('provider_config_json = ?');
+    values.push(JSON.stringify(body.providerConfig));
+  }
+
+  const isDefault = body.isDefault ?? false;
+  
+  transaction(() => {
+    if (isDefault) {
+      prepare('UPDATE profile_ai_configs SET is_default = 0 WHERE profile_id = ?').run(profileId);
+      updates.push('is_default = 1');
+    }
+
+    values.push(configId);
+    prepare(`UPDATE profile_ai_configs SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+    if (isDefault) {
+      prepare('UPDATE profiles SET active_ai_config_id = ?, updated_at = ? WHERE id = ?').run(configId, now, profileId);
+    }
+  });
+
+  const updated = prepare<AiConfigRow>('SELECT * FROM profile_ai_configs WHERE id = ?').get(configId) as AiConfigRow;
+  return c.json(rowToAiConfig(updated));
+});
+
+// ============ Delete AI config from profile ============
+profileRoutes.delete('/:id/ai-configs/:configId', (c) => {
+  const { id: profileId, configId } = c.req.param();
+  
+  const existing = prepare<AiConfigRow>('SELECT * FROM profile_ai_configs WHERE id = ? AND profile_id = ?')
+    .get(configId, profileId) as AiConfigRow | null;
+  
+  if (!existing) {
+    return c.json({ error: 'AI config not found' }, 404);
+  }
+
+  // Don't delete the last one
+  const count = prepare<{ c: number }>('SELECT COUNT(*) as c FROM profile_ai_configs WHERE profile_id = ?')
+    .get(profileId) as { c: number };
+  if (count.c <= 1) {
+    return c.json({ error: 'Cannot delete the last AI config' }, 400);
+  }
+
+  transaction(() => {
+    prepare('DELETE FROM profile_ai_configs WHERE id = ?').run(configId);
+    
+    // If we deleted the active one, pick another
+    const profile = prepare<ProfileRow>('SELECT active_ai_config_id FROM profiles WHERE id = ?').get(profileId) as ProfileRow;
+    if (profile.active_ai_config_id === configId) {
+      const next = prepare<{ id: string }>('SELECT id FROM profile_ai_configs WHERE profile_id = ? LIMIT 1').get(profileId) as { id: string };
+      prepare('UPDATE profiles SET active_ai_config_id = ? WHERE id = ?').run(next.id, profileId);
+    }
+  });
+
+  return c.json({ success: true });
+});
+
 // ============ Delete profile ============
 profileRoutes.delete('/:id', (c) => {
   const id = c.req.param('id');

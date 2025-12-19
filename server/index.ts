@@ -13,6 +13,7 @@ import { aiProviderRoutes } from './routes/aiProviders';
 import { characterCardRoutes } from './routes/characterCards';
 import { openRouterModelsRoutes } from './routes/openRouterModels';
 import { aiRequestLogsRoutes } from './routes/aiRequestLogs';
+import { prepare } from './db';
 
 const app = new Hono();
 
@@ -53,6 +54,20 @@ app.route('/api/character-cards', characterCardRoutes);
 const port = Number(process.env.PORT) || 3001;
 
 initDb();
+
+// Seed default settings if empty
+const seedSettings = () => {
+  const count = prepare<{ c: number }>('SELECT COUNT(*) as c FROM settings').get() as { c: number };
+  if (count.c === 0) {
+    const now = Date.now();
+    const stmt = prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)');
+    stmt.run('debug.streaming', 'false', now);
+    stmt.run('debug.ai', 'false', now);
+    console.log('⚙️ Seeded default settings');
+  }
+};
+seedSettings();
+
 seedDefaultProfileIfEmpty();
 defaultChatId = seedDemoDataIfEmpty();
 
