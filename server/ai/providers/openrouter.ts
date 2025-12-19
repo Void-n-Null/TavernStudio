@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { AiProviderDefinition } from '../providerSchema';
 
 const secretSchema = z.object({
@@ -8,6 +9,13 @@ const secretSchema = z.object({
 export const openRouterProvider: AiProviderDefinition = {
   id: 'openrouter',
   label: 'OpenRouter',
+  ui: {
+    logoUrl: '/provider/openrouter.svg',
+    accentColor: '#ffffff',
+    theme: 'violet',
+    description: 'Unified API for dozens of models from OpenAI, Anthropic, Google, and more.',
+    defaultModelId: 'openai/gpt-4o-mini',
+  },
   configSchema: z.object({
     defaultModelId: z.string().min(1).default('openai/gpt-4o-mini'),
     // Optional identity headers recommended by OpenRouter.
@@ -31,5 +39,26 @@ export const openRouterProvider: AiProviderDefinition = {
       requiredSecretKeys: ['apiKey'],
     },
   ],
+  createClient: (secrets, config) => {
+    return createOpenRouter({
+      apiKey: secrets.apiKey,
+      headers: {
+        ...(config.appName ? { 'X-Title': config.appName } : {}),
+        ...(config.appUrl ? { 'HTTP-Referer': config.appUrl } : {}),
+      },
+    });
+  },
+  validate: async (secrets, config) => {
+    const res = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: {
+        Authorization: `Bearer ${secrets.apiKey}`,
+        ...(config.appName ? { 'X-Title': config.appName } : {}),
+        ...(config.appUrl ? { 'HTTP-Referer': config.appUrl } : {}),
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`OpenRouter validation failed: ${res.status} ${await res.text()}`);
+    }
+  },
 };
 
