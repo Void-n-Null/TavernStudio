@@ -16,6 +16,8 @@ export interface OpenRouterModelEndpoint {
   context_length: number;
   provider_name: string;
   provider_display_name: string;
+  provider_slug: string;
+  quantization?: string;
   pricing: OpenRouterModelPricing;
   is_free: boolean;
   supports_reasoning: boolean;
@@ -36,6 +38,8 @@ export interface OpenRouterModel {
   supports_reasoning: boolean;
   hidden: boolean;
   permaslug: string;
+  /** Default provider order for this model (provider slugs) */
+  default_order?: string[];
   endpoint?: OpenRouterModelEndpoint;
 }
 
@@ -77,9 +81,12 @@ openRouterModelsRoutes.get('/', async (c) => {
     const json = await response.json() as OpenRouterModelsResponse;
     
     // Extract and normalize the models
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const models: OpenRouterModel[] = (json.data?.models || [])
-      .filter((m: OpenRouterModel) => !m.hidden)
-      .map((m: OpenRouterModel) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter((m: any) => !m.hidden)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((m: any) => ({
         slug: m.slug,
         name: m.name,
         short_name: m.short_name,
@@ -92,12 +99,17 @@ openRouterModelsRoutes.get('/', async (c) => {
         supports_reasoning: m.supports_reasoning || false,
         hidden: m.hidden,
         permaslug: m.permaslug,
+        // Include default provider order if available (contains provider slugs)
+        default_order: m.default_order?.length > 0 ? m.default_order : undefined,
         endpoint: m.endpoint ? {
           id: m.endpoint.id,
           name: m.endpoint.name,
           context_length: m.endpoint.context_length,
           provider_name: m.endpoint.provider_name,
           provider_display_name: m.endpoint.provider_display_name,
+          // Provider slug is the key identifier for routing
+          provider_slug: m.endpoint.provider_slug,
+          quantization: m.endpoint.quantization,
           pricing: m.endpoint.pricing,
           is_free: m.endpoint.is_free,
           supports_reasoning: m.endpoint.supports_reasoning,

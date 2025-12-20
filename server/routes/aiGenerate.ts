@@ -79,6 +79,18 @@ async function getModelPricing(): Promise<Map<string, { inputPrice: number; outp
   }
 }
 
+/**
+ * OpenRouter-specific provider routing configuration.
+ */
+interface OpenRouterProviderRouting {
+  order?: string[];
+  ignore?: string[];
+  allow?: string[];
+  allow_fallbacks?: boolean;
+  require_parameters?: boolean;
+  quantizations?: string[];
+}
+
 interface GenerateRequest {
   providerId: string;
   modelId: string;
@@ -96,6 +108,13 @@ interface GenerateRequest {
     presencePenalty?: number;
     frequencyPenalty?: number;
     stopSequences?: string[];
+  };
+  /**
+   * OpenRouter-specific configuration for provider routing.
+   * Only used when providerId is 'openrouter'.
+   */
+  openRouterConfig?: {
+    provider?: OpenRouterProviderRouting;
   };
 }
 
@@ -118,7 +137,7 @@ aiGenerateRoutes.post('/stream', async (c) => {
 
   try {
     const body = await c.req.json<GenerateRequest>();
-    const { providerId, modelId, pricingModelId, messages, params } = body;
+    const { providerId, modelId, pricingModelId, messages, params, openRouterConfig } = body;
 
     if (!providerId || !modelId) {
       return c.json({ error: 'Missing providerId or modelId' }, 400);
@@ -142,19 +161,23 @@ aiGenerateRoutes.post('/stream', async (c) => {
     
     if (!client) {
       // Try to create client from stored secrets
-      const authStrategyId = connection.auth_strategy_id || 'apiKey';
-      const strategy = providerDef.authStrategies.find(s => s.id === authStrategyId);
-      if (!strategy) {
-        return c.json({ error: `Unknown auth strategy: ${authStrategyId}` }, 400);
-      }
-
       const secrets: Record<string, string> = {};
-      for (const key of strategy.requiredSecretKeys) {
-        const val = getProviderSecret(providerId, authStrategyId, key);
-        if (!val) {
-          return c.json({ error: `Missing ${key} secret` }, 400);
+      if (providerDef.authStrategies.length > 0) {
+        const authStrategyId = connection.auth_strategy_id ?? providerDef.authStrategies[0]?.id ?? null;
+        if (!authStrategyId) return c.json({ error: `Missing auth strategy id for provider: ${providerId}` }, 400);
+
+        const strategy = providerDef.authStrategies.find((s) => s.id === authStrategyId);
+        if (!strategy) {
+          return c.json({ error: `Unknown auth strategy: ${authStrategyId}` }, 400);
         }
-        secrets[key] = val;
+
+        for (const key of strategy.requiredSecretKeys) {
+          const val = getProviderSecret(providerId, authStrategyId, key);
+          if (!val) {
+            return c.json({ error: `Missing ${key} secret` }, 400);
+          }
+          secrets[key] = val;
+        }
       }
 
       const rawConfig = getProviderConfig(providerId) ?? {};
@@ -213,7 +236,8 @@ aiGenerateRoutes.post('/stream', async (c) => {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const result = await streamText({
+          // Build streamText options
+          const streamOptions: Parameters<typeof streamText>[0] = {
             model,
             messages, // Everything is in messages: system (role: system), history, prefill
             temperature: params?.temperature,
@@ -223,7 +247,18 @@ aiGenerateRoutes.post('/stream', async (c) => {
             presencePenalty: params?.presencePenalty,
             frequencyPenalty: params?.frequencyPenalty,
             stopSequences: params?.stopSequences,
-          });
+          };
+
+          // Add OpenRouter provider options if configured
+          // The openrouter provider accepts provider routing config via providerOptions.openrouter.provider
+          if (providerId === 'openrouter' && openRouterConfig?.provider) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (streamOptions as any).providerOptions = {
+              openrouter: { provider: openRouterConfig.provider },
+            };
+          }
+
+          const result = await streamText(streamOptions);
 
           // Stream text deltas
           for await (const delta of result.textStream) {

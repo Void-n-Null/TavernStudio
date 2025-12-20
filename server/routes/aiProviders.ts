@@ -86,13 +86,16 @@ aiProviderRoutes.put('/:providerId/secrets/:authStrategyId', async (c) => {
 // Explicitly connect (validate credentials and cache client instance).
 aiProviderRoutes.post('/:providerId/connect', async (c) => {
   const providerId = c.req.param('providerId');
-  getProviderOrThrow(providerId);
+  const provider = getProviderOrThrow(providerId);
 
-  const body = await c.req.json<{ authStrategyId: string }>().catch(() => ({ authStrategyId: 'apiKey' }));
-  const authStrategyId = body.authStrategyId || 'apiKey';
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  const authStrategyIdRaw =
+    typeof (body as any)?.authStrategyId === 'string' ? ((body as any).authStrategyId as string) : null;
+  const authStrategyId = authStrategyIdRaw && authStrategyIdRaw.length > 0 ? authStrategyIdRaw : null;
 
   try {
-    await connectProvider(providerId, authStrategyId);
+    // Providers can have zero auth strategies (no-auth). In that case we ignore authStrategyId.
+    await connectProvider(providerId, provider.authStrategies.length > 0 ? authStrategyId : null);
     return c.json({ success: true });
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
@@ -116,23 +119,27 @@ aiProviderRoutes.get('/:providerId/models', async (c) => {
 
   // Get connection to find the active auth strategy
   const connection = getProviderConnection(providerId);
-  const authStrategyId = connection?.auth_strategy_id || 'apiKey';
+  const authStrategyId = connection?.auth_strategy_id ?? provider.authStrategies[0]?.id ?? null;
 
   // Gather secrets for the auth strategy
-  const strategy = provider.authStrategies.find((s) => s.id === authStrategyId);
+  const strategy = authStrategyId ? provider.authStrategies.find((s) => s.id === authStrategyId) : undefined;
   const secrets: Record<string, string> = {};
   
   if (strategy) {
     for (const key of strategy.requiredSecretKeys) {
-      const value = getProviderSecret(providerId, authStrategyId, key);
+      const value = getProviderSecret(providerId, authStrategyId!, key);
       if (value) {
         secrets[key] = value;
       }
     }
   }
 
+  const rawConfig = getProviderConfig(providerId) ?? {};
+  const parsedConfig = provider.configSchema.safeParse(rawConfig);
+  const config = parsedConfig.success ? parsedConfig.data : {};
+
   try {
-    const models = await provider.listModels(secrets);
+    const models = await provider.listModels(secrets, config);
     return c.json({ models });
   } catch (e) {
     console.error(`[aiProviders] Error fetching models for ${providerId}:`, e);
@@ -144,7 +151,7 @@ aiProviderRoutes.get('/:providerId/models', async (c) => {
 // Starts OAuth PKCE flow and returns an authUrl to redirect the browser to.
 aiProviderRoutes.post('/openrouter/pkce/start', async (c) => {
   // Return URL is where we send the user back after the callback finishes.
-  const body = await c.req.json<{ returnUrl?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ returnUrl?: string }>().catch((): { returnUrl?: string } => ({}));
   const origin = c.req.header('origin') || 'http://localhost:5173';
   const returnUrl = body.returnUrl || origin;
 
