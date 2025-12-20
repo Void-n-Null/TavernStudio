@@ -11,7 +11,6 @@ interface UseCostsTabProps {
 
 export function useCostsTab({ activeProviderId }: UseCostsTabProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
-  const [calculatorExpanded, setCalculatorExpanded] = useState(false);
 
   // Calculate date range
   const filters = useMemo(() => {
@@ -56,8 +55,6 @@ export function useCostsTab({ activeProviderId }: UseCostsTabProps) {
   return {
     timeRange,
     setTimeRange,
-    calculatorExpanded,
-    setCalculatorExpanded,
     summary,
     summaryLoading,
     byModel,

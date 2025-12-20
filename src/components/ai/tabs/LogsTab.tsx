@@ -7,8 +7,8 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-  Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Filter,
-  AlertCircle, Cpu, DollarSign, RefreshCw
+  Clock, CheckCircle, XCircle, ChevronDown, ChevronUp,
+  AlertCircle, DollarSign, RefreshCw
 } from 'lucide-react';
 import { aiRequestLogs, type AiRequestLog } from '../../../api/ai';
 import { queryKeys } from '../../../lib/queryClient';
@@ -46,13 +46,6 @@ export function LogsTab({ activeProviderId }: LogsTabProps) {
 
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
-
-  // Extract unique models from logs for filter dropdown
-  const uniqueModels = useMemo(() => {
-    const models = new Set<string>();
-    logs.forEach(l => models.add(l.model_slug));
-    return Array.from(models).sort();
-  }, [logs]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -265,7 +258,10 @@ function LogRow({
             <DetailItem label="Input Tokens" value={log.input_tokens?.toLocaleString() ?? '-'} />
             <DetailItem label="Output Tokens" value={log.output_tokens?.toLocaleString() ?? '-'} />
             <DetailItem label="Latency" value={log.latency_ms ? `${log.latency_ms}ms` : '-'} />
-            <DetailItem label="Cost" value={log.calculated_cost_usd ? `$${log.calculated_cost_usd.toFixed(6)}` : '-'} />
+            <DetailItem
+              label="Cost"
+              value={log.calculated_cost_usd !== null ? `$${log.calculated_cost_usd.toFixed(6)}` : '-'}
+            />
           </div>
 
           {/* Request Metadata */}
