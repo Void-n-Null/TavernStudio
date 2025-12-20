@@ -8,6 +8,7 @@ import { queryKeys } from '../lib/queryClient';
 export const cleanModelId = (id: string): string => {
   return id
     .toLowerCase()
+    .replace(/preview/g, '')      // remove "preview" variants
     .replace(/[-_]?20\d{6}/g, '') // remove dates like 20240620
     .replace(/\d{6,}/g, '')      // remove long numbers
     .replace(/[-_.]/g, '')       // remove separators
