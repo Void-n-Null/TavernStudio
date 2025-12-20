@@ -64,25 +64,25 @@ export function CharacterForge() {
     if (cardId) {
       // Clicking a character should undo fullscreen browsing.
       if (isGalleryFullscreen) setGalleryFullscreen(false);
-      navigate(`/forge/${cardId}`);
+      navigate(`/forge/${cardId}`, { state: location.state });
     } else {
-      navigate('/forge');
+      navigate('/forge', { state: location.state });
     }
   };
   
   const handleEditCard = (cardId: string) => {
     if (isGalleryFullscreen) setGalleryFullscreen(false);
     enterEditMode(cardId);
-    navigate(`/forge/${cardId}/edit`);
+    navigate(`/forge/${cardId}/edit`, { state: location.state });
   };
   
   const handleExitEdit = useCallback(() => {
     if (selectedCardId) {
-      navigate(`/forge/${selectedCardId}`);
+      navigate(`/forge/${selectedCardId}`, { state: location.state });
     } else {
-      navigate('/forge');
+      navigate('/forge', { state: location.state });
     }
-  }, [navigate, selectedCardId]);
+  }, [navigate, selectedCardId, location.state]);
   
   const handleCreateNew = () => {
     if (isGalleryFullscreen) setGalleryFullscreen(false);
@@ -97,9 +97,9 @@ export function CharacterForge() {
     (newId: string) => {
       // After first save, stay in the editor (edit route) so users can keep saving.
       enterEditMode(newId);
-      navigate(`/forge/${newId}/edit`);
+      navigate(`/forge/${newId}/edit`, { state: location.state });
     },
-    [enterEditMode, navigate]
+    [enterEditMode, navigate, location.state]
   );
 
   const handleSavedNoop = useCallback(() => {}, []);

@@ -214,6 +214,7 @@ function EmptyState({ onCreateNew }: EmptyStateProps) {
         </button>
         <Link
           to="/forge"
+          state={{ from: '/' }}
           className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
         >
           <Users className="h-4 w-4" />

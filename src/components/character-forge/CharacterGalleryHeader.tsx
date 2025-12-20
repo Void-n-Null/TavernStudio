@@ -3,7 +3,8 @@
  */
 
 import { useRef } from 'react';
-import { Search, Grid3X3, List, SortAsc, SortDesc, Plus, X, Maximize2, Minimize2 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Search, Grid3X3, List, SortAsc, SortDesc, Plus, X, Maximize2, Minimize2, ArrowLeft } from 'lucide-react';
 import { useCharacterForgeStore } from '../../store/characterForgeStore';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
@@ -14,6 +15,11 @@ interface CharacterGalleryHeaderProps {
 
 export function CharacterGalleryHeader({ onCreateNew }: CharacterGalleryHeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get the path we came from (passed via location state from AppToolbar)
+  const fromPath = (location.state as { from?: string })?.from || '/';
   
   const {
     searchQuery,
@@ -35,13 +41,24 @@ export function CharacterGalleryHeader({ onCreateNew }: CharacterGalleryHeaderPr
   return (
     <div className="shrink-0 border-b border-zinc-800/50 bg-zinc-950/60 p-3">
       {/* Title row */}
-      <div className="mb-3 flex items-center justify-between">
-        <h1 
-          className="text-lg font-bold tracking-tight text-zinc-100"
-          style={{ fontFamily: 'Georgia, serif' }}
-        >
-          Tavern Studio
-        </h1>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(fromPath)}
+            className="h-8 w-8 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+            title={fromPath.startsWith('/chats/') ? "Back to Chat" : "Back to Chats"}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 
+            className="text-lg font-bold tracking-tight text-zinc-100"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            Tavern Studio
+          </h1>
+        </div>
         <Button
           size="sm"
           onClick={onCreateNew}

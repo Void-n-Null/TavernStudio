@@ -183,7 +183,7 @@ export function AppToolbar({ onOpenSettings }: AppToolbarProps) {
             </Button>
           </Link>
         )}
-        <Link to="/forge">
+        <Link to="/forge" state={{ from: location.pathname }}>
           <Button
             variant={header.settingsButtonVariant}
             className="shrink-0 flex items-center gap-2"
