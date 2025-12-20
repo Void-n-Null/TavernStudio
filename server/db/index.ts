@@ -125,11 +125,15 @@ export function initDb(): Database {
     }
   }
 
-  // 2. Ensure 'active_ai_config_id' exists in profiles
+  // 2. Ensure 'active_ai_config_id' and 'selected_model_id' exist in profiles
   const profileCols = db.query("PRAGMA table_info(profiles)").all() as any[];
   if (!profileCols.some(c => c.name === 'active_ai_config_id')) {
     db.run('ALTER TABLE profiles ADD COLUMN active_ai_config_id TEXT');
     console.log('🔧 Added active_ai_config_id to profiles');
+  }
+  if (!profileCols.some(c => c.name === 'selected_model_id')) {
+    db.run('ALTER TABLE profiles ADD COLUMN selected_model_id TEXT');
+    console.log('🔧 Added selected_model_id to profiles');
   }
 
   // 2. Ensure all columns exist in character_cards

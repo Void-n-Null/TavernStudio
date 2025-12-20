@@ -10,7 +10,6 @@ export interface AiConfig {
   name: string;
   providerId: string;
   authStrategyId: string;
-  modelId: string;
   params: Record<string, unknown>;
   providerConfig: Record<string, unknown>;
   isDefault: boolean;
@@ -24,6 +23,7 @@ export interface Profile {
   messageStyle: MessageStyleConfig;
   aiConfigs: AiConfig[];
   activeAiConfigId: string;
+  selectedModelId: string | null;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
@@ -48,4 +48,5 @@ export interface UpdateProfileRequest {
   name?: string;
   messageStyle?: MessageStyleConfig;
   activeAiConfigId?: string;
+  selectedModelId?: string;
 }

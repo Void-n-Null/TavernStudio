@@ -10,6 +10,7 @@ interface ProfileRow {
   name: string;
   message_style: string;
   active_ai_config_id?: string | null;
+  selected_model_id?: string | null;
   is_default: number;
   created_at: number;
   updated_at: number;
@@ -21,7 +22,6 @@ interface AiConfigRow {
   name: string;
   provider_id: string;
   auth_strategy_id: string;
-  model_id: string;
   params_json: string;
   provider_config_json: string;
   is_default: number;
@@ -34,7 +34,6 @@ interface AiConfigResponse {
   name: string;
   providerId: string;
   authStrategyId: string;
-  modelId: string;
   params: Record<string, unknown>;
   providerConfig: Record<string, unknown>;
   isDefault: boolean;
@@ -48,6 +47,7 @@ interface ProfileResponse {
   messageStyle: MessageStyleConfig;
   aiConfigs: AiConfigResponse[];
   activeAiConfigId: string;
+  selectedModelId: string | null;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
@@ -76,7 +76,6 @@ function rowToAiConfig(row: AiConfigRow): AiConfigResponse {
     name: row.name,
     providerId: row.provider_id,
     authStrategyId: row.auth_strategy_id,
-    modelId: row.model_id,
     params,
     providerConfig,
     isDefault: row.is_default === 1,
@@ -107,15 +106,14 @@ function ensureDefaultAiConfigForProfile(profileId: string): { activeId: string 
   const id = crypto.randomUUID();
   prepare(`
     INSERT INTO profile_ai_configs
-      (id, profile_id, name, provider_id, auth_strategy_id, model_id, params_json, provider_config_json, is_default, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, profile_id, name, provider_id, auth_strategy_id, params_json, provider_config_json, is_default, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     profileId,
     'Default AI',
     'openrouter',
     'apiKey',
-    'openai/gpt-4o-mini',
     '{}',
     '{}',
     1,
@@ -150,6 +148,7 @@ function rowToProfile(row: ProfileRow): ProfileResponse {
       messageStyle: applyMessageStyleDefaults(parsed),
       aiConfigs: refreshed,
       activeAiConfigId,
+      selectedModelId: row.selected_model_id ?? 'openai/gpt-4o-mini',
       isDefault: row.is_default === 1,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -162,6 +161,7 @@ function rowToProfile(row: ProfileRow): ProfileResponse {
     messageStyle: applyMessageStyleDefaults(parsed),
     aiConfigs,
     activeAiConfigId,
+    selectedModelId: row.selected_model_id ?? 'openai/gpt-4o-mini',
     isDefault: row.is_default === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -213,12 +213,14 @@ profileRoutes.post('/', async (c) => {
     name: string;
     messageStyle?: MessageStyleConfig;
     isDefault?: boolean;
+    selectedModelId?: string;
   }>();
   
   const id = crypto.randomUUID();
   const now = Date.now();
   const messageStyle = body.messageStyle ?? defaultMessageStyleConfig;
   const isDefault = body.isDefault ?? false;
+  const selectedModelId = body.selectedModelId ?? 'openai/gpt-4o-mini';
   const aiId = crypto.randomUUID();
   
   transaction(() => {
@@ -228,21 +230,20 @@ profileRoutes.post('/', async (c) => {
     }
     
     prepare(`
-      INSERT INTO profiles (id, name, message_style, active_ai_config_id, is_default, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, body.name, JSON.stringify(messageStyle), aiId, isDefault ? 1 : 0, now, now);
+      INSERT INTO profiles (id, name, message_style, active_ai_config_id, selected_model_id, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, body.name, JSON.stringify(messageStyle), aiId, selectedModelId, isDefault ? 1 : 0, now, now);
 
     prepare(`
       INSERT INTO profile_ai_configs
-        (id, profile_id, name, provider_id, auth_strategy_id, model_id, params_json, provider_config_json, is_default, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, profile_id, name, provider_id, auth_strategy_id, params_json, provider_config_json, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       aiId,
       id,
       'Default AI',
       'openrouter',
       'apiKey',
-      'openai/gpt-4o-mini',
       '{}',
       '{}',
       1,
@@ -261,7 +262,6 @@ profileRoutes.post('/', async (c) => {
         name: 'Default AI',
         providerId: 'openrouter',
         authStrategyId: 'apiKey',
-        modelId: 'openai/gpt-4o-mini',
         params: {},
         providerConfig: {},
         isDefault: true,
@@ -270,6 +270,7 @@ profileRoutes.post('/', async (c) => {
       },
     ],
     activeAiConfigId: aiId,
+    selectedModelId,
     isDefault,
     createdAt: now,
     updatedAt: now,
@@ -283,6 +284,7 @@ profileRoutes.patch('/:id', async (c) => {
     name?: string;
     messageStyle?: MessageStyleConfig;
     activeAiConfigId?: string;
+    selectedModelId?: string;
   }>();
   
   const existing = prepare<ProfileRow>('SELECT * FROM profiles WHERE id = ?').get(id) as ProfileRow | null;
@@ -314,6 +316,11 @@ profileRoutes.patch('/:id', async (c) => {
     updates.push('active_ai_config_id = ?');
     values.push(body.activeAiConfigId);
   }
+
+  if (body.selectedModelId !== undefined) {
+    updates.push('selected_model_id = ?');
+    values.push(body.selectedModelId);
+  }
   
   values.push(id);
   
@@ -331,7 +338,6 @@ profileRoutes.post('/:id/ai-configs', async (c) => {
     name: string;
     providerId: string;
     authStrategyId: string;
-    modelId: string;
     params?: Record<string, unknown>;
     providerConfig?: Record<string, unknown>;
     isDefault?: boolean;
@@ -353,15 +359,14 @@ profileRoutes.post('/:id/ai-configs', async (c) => {
 
     prepare(`
       INSERT INTO profile_ai_configs
-        (id, profile_id, name, provider_id, auth_strategy_id, model_id, params_json, provider_config_json, is_default, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, profile_id, name, provider_id, auth_strategy_id, params_json, provider_config_json, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       profileId,
       body.name,
       body.providerId,
       body.authStrategyId,
-      body.modelId,
       JSON.stringify(body.params ?? {}),
       JSON.stringify(body.providerConfig ?? {}),
       isDefault ? 1 : 0,
@@ -383,7 +388,6 @@ profileRoutes.patch('/:id/ai-configs/:configId', async (c) => {
   const { id: profileId, configId } = c.req.param();
   const body = await c.req.json<{
     name?: string;
-    modelId?: string;
     authStrategyId?: string;
     params?: Record<string, unknown>;
     providerConfig?: Record<string, unknown>;
@@ -404,10 +408,6 @@ profileRoutes.patch('/:id/ai-configs/:configId', async (c) => {
   if (body.name !== undefined) {
     updates.push('name = ?');
     values.push(body.name);
-  }
-  if (body.modelId !== undefined) {
-    updates.push('model_id = ?');
-    values.push(body.modelId);
   }
   if (body.authStrategyId !== undefined) {
     updates.push('auth_strategy_id = ?');
@@ -537,23 +537,23 @@ export function seedDefaultProfileIfEmpty(): void {
     const id = crypto.randomUUID();
     const now = Date.now();
     const aiId = crypto.randomUUID();
+    const defaultModelId = 'openai/gpt-4o-mini';
     
     prepare(`
-      INSERT INTO profiles (id, name, message_style, active_ai_config_id, is_default, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, 'Default', JSON.stringify(defaultMessageStyleConfig), aiId, 1, now, now);
+      INSERT INTO profiles (id, name, message_style, active_ai_config_id, selected_model_id, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, 'Default', JSON.stringify(defaultMessageStyleConfig), aiId, defaultModelId, 1, now, now);
 
     prepare(`
       INSERT INTO profile_ai_configs
-        (id, profile_id, name, provider_id, auth_strategy_id, model_id, params_json, provider_config_json, is_default, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, profile_id, name, provider_id, auth_strategy_id, params_json, provider_config_json, is_default, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       aiId,
       id,
       'Default AI',
       'openrouter',
       'apiKey',
-      'openai/gpt-4o-mini',
       '{}',
       '{}',
       1,
@@ -580,6 +580,14 @@ export function seedDefaultProfileIfEmpty(): void {
       if (first) {
         prepare('UPDATE profiles SET active_ai_config_id = ?, updated_at = ? WHERE id = ?').run(first.id, Date.now(), row.id);
       }
+    }
+
+    // Ensure selected_model_id is set.
+    if (!row.selected_model_id) {
+      // Try to backfill from the active AI config if possible.
+      const aiConfigRow = row.active_ai_config_id ? prepare<AiConfigRow>('SELECT * FROM profile_ai_configs WHERE id = ?').get(row.active_ai_config_id) as any : null;
+      const modelId = aiConfigRow?.model_id || 'openai/gpt-4o-mini';
+      prepare('UPDATE profiles SET selected_model_id = ?, updated_at = ? WHERE id = ?').run(modelId, Date.now(), row.id);
     }
   }
 }
