@@ -1,11 +1,13 @@
 import { memo, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
-import { useTypographyConfig, useEditConfig } from '../../hooks/queries/useProfiles';
+import { useTypographyConfig, useEditConfig, useProfileName } from '../../hooks/queries/useProfiles';
+import { useCharacterName } from '../../hooks/queries/chats/defaultChat';
 import { fontSizeMap, lineHeightMap, fontFamilyMap, fontWeightMap } from '../../types/messageStyle';
 import { Streamdown, defaultRehypePlugins } from 'streamdown';
 import { formatStreamdownInput } from './streamdown/formatStreamdownInput';
 import { useRafCoalescedStreamingRaw } from './streamdown/useRafCoalescedStreamingRaw';
 import { rehypeQuoteWrap } from './streamdown/rehypeQuoteWrap';
+import { replaceMacros } from '../../lib/macros';
 
 interface MessageContentProps {
   nodeId: string;
@@ -15,6 +17,8 @@ interface MessageContentProps {
   isStreaming?: boolean;
   isEditing?: boolean;
   onEditChange?: (content: string) => void;
+  /** Optional name of the speaker for {{char}} macro */
+  speakerName?: string;
 }
 
 /**
@@ -31,9 +35,12 @@ export const MessageContent = memo(function MessageContent({
   isStreaming = false,
   isEditing = false,
   onEditChange,
+  speakerName,
 }: MessageContentProps) {
   const typography = useTypographyConfig();
   const editConfig = useEditConfig();
+  const profileName = useProfileName();
+  const chatCharacterName = useCharacterName();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const streamingRaw = useRafCoalescedStreamingRaw(isStreaming);
@@ -41,11 +48,17 @@ export const MessageContent = memo(function MessageContent({
   /**
    * Optimistically close unclosed quotes in raw markdown.
    * If we see an opening " without a closing ", add one at the end.
+   * Also replaces macros like {{user}} and {{char}}.
    */
   const displayContent = useMemo(() => {
     const raw = isStreaming ? streamingRaw : content;
-    return formatStreamdownInput(raw);
-  }, [content, isStreaming, streamingRaw]);
+    const formatted = formatStreamdownInput(raw);
+    
+    return replaceMacros(formatted, {
+      '{{user}}': profileName,
+      '{{char}}': isBot ? (speakerName || chatCharacterName) : chatCharacterName,
+    });
+  }, [content, isStreaming, streamingRaw, profileName, speakerName, isBot, chatCharacterName]);
   void containerRef;
 
   const rehypePlugins = useMemo(() => {

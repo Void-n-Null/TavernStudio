@@ -282,6 +282,7 @@ export const MessageItem = memo(function MessageItem({
           isStreaming={isStreamingThis}
           isEditing={isEditing}
           onEditChange={setEditContent}
+          speakerName={speaker.name}
         />
         
         {isEditing && (
