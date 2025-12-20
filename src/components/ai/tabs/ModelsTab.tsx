@@ -14,9 +14,9 @@ import { ActiveModelDashboard } from './models/ActiveModelDashboard';
 import { RecentModelsGrid } from './models/RecentModelsGrid';
 import { VirtualizedModelList } from './models/VirtualizedModelList';
 import { FilterPill } from './models/FilterPill';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 
 interface ModelsTabProps {
-  isMobile: boolean;
   activeProviderId?: string | null;
   activeProviderLabel?: string | null;
   /** Currently selected model ID from the profile's AI config */
@@ -26,12 +26,12 @@ interface ModelsTabProps {
 }
 
 export function ModelsTab({ 
-  isMobile, 
   activeProviderId, 
   activeProviderLabel,
   selectedModelId,
   onSelectModel,
 }: ModelsTabProps) {
+  const isMobile = useIsMobile();
   const {
     mode,
     setMode,

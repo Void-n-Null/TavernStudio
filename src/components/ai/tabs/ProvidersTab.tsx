@@ -16,9 +16,9 @@ import { showToast } from '../../ui/toast';
 import { ProviderRow } from '../providers/ProviderRow';
 import { ProviderConfigDialog } from '../providers/ProviderConfigDialog';
 import { type SecretDraftKey } from '../providers/AuthStrategyForm';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 
 interface ProvidersTabProps {
-  isMobile: boolean;
   activeProviderId?: string | null;
   onActiveProviderChange?: (id: string) => void;
   selectedModelId?: string | null;
@@ -26,12 +26,12 @@ interface ProvidersTabProps {
 }
 
 export function ProvidersTab({ 
-  isMobile, 
   activeProviderId, 
   onActiveProviderChange,
   selectedModelId,
   onSelectModel
 }: ProvidersTabProps) {
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [secretDrafts, setSecretDrafts] = useState<Record<SecretDraftKey, string>>({});
@@ -147,7 +147,6 @@ export function ProvidersTab({
                 showToast({ message: `${provider.label} is now active`, type: 'success' });
               }}
               onConfigure={() => setSelectedProviderId(provider.id)}
-              isMobile={isMobile}
               />
             ))}
           </div>
@@ -158,7 +157,6 @@ export function ProvidersTab({
               provider={selectedProvider}
         isOpen={!!selectedProviderId}
         onClose={() => setSelectedProviderId(null)}
-              isMobile={isMobile}
               secretDrafts={secretDrafts}
               setSecretDrafts={setSecretDrafts}
               onSaveAndConnect={handleSaveAndConnect}

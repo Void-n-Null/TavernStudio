@@ -14,13 +14,14 @@ import { StatCard } from './costs/StatCard';
 import { CostCalculator } from './costs/CostCalculator';
 import { ModelCostBar } from './costs/ModelCostBar';
 import { TrendChart } from './costs/TrendChart';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 
 interface CostsTabProps {
-  isMobile: boolean;
   activeProviderId?: string | null;
 }
 
-export function CostsTab({ isMobile, activeProviderId }: CostsTabProps) {
+export function CostsTab({ activeProviderId }: CostsTabProps) {
+  const isMobile = useIsMobile();
   const {
     timeRange,
     setTimeRange,

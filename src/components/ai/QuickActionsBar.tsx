@@ -12,10 +12,7 @@ import { Cpu, Star, Clock, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useActiveProfile } from '../../hooks/queries/profiles/queries';
 import { useUpdateProfile } from '../../hooks/queries/profiles/mutations';
-
-interface QuickActionsBarProps {
-  isMobile: boolean;
-}
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 // Get recent models from localStorage
 function getRecentModels(): string[] {
@@ -65,7 +62,8 @@ export function togglePinnedModel(modelSlug: string): boolean {
   }
 }
 
-export function QuickActionsBar({ isMobile }: QuickActionsBarProps) {
+export function QuickActionsBar() {
+  const isMobile = useIsMobile();
   const [expanded, setExpanded] = useState(false);
   const { data: profile } = useActiveProfile();
   const [recentModels, setRecentModels] = useState<string[]>([]);

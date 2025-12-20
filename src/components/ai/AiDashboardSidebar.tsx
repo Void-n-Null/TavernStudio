@@ -8,6 +8,7 @@ import { Plug, Cpu, DollarSign, ScrollText, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { AiProviderStatus } from '../../api/ai';
 import { ProviderLogo } from './ProviderLogo';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export type AiTabId = 'providers' | 'models' | 'costs' | 'logs';
 
@@ -17,7 +18,6 @@ interface AiDashboardSidebarProps {
   providers: AiProviderStatus[];
   activeProviderId: string | null;
   onActiveProviderChange: (id: string) => void;
-  isMobile: boolean;
 }
 
 export function AiDashboardSidebar({
@@ -26,8 +26,8 @@ export function AiDashboardSidebar({
   providers,
   activeProviderId,
   onActiveProviderChange,
-  isMobile,
 }: AiDashboardSidebarProps) {
+  const isMobile = useIsMobile();
   const connectedProviders = providers.filter(p => p.connection?.status === 'connected');
   const activeProvider = providers.find(p => p.id === activeProviderId);
 

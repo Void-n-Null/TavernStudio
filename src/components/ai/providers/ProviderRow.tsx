@@ -9,7 +9,6 @@ interface ProviderRowProps {
   isActive: boolean;
   onActivate: () => void;
   onConfigure: () => void;
-  isMobile: boolean;
 }
 
 export function ProviderRow({
@@ -17,7 +16,6 @@ export function ProviderRow({
   isActive,
   onActivate,
   onConfigure,
-  isMobile,
 }: ProviderRowProps) {
   const isConnected = provider.connection?.status === 'connected';
   const hasError = provider.connection?.last_error;

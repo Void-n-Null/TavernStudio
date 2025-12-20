@@ -6,6 +6,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent } from '../ui/dialog';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { cn } from '../../lib/utils';
@@ -17,11 +18,11 @@ import { QuickActionsBar } from './QuickActionsBar';
 import { AiDashboardSidebar, type AiTabId } from './AiDashboardSidebar';
 import { AiDashboardMobileNav } from './AiDashboardMobileNav';
 import { useActiveProfile } from '../../hooks/queries/profiles/queries';
-import { useAiProvidersModalController } from './useAiProvidersModalController';
 import { useUpdateProfile, useCreateAiConfig } from '../../hooks/queries/profiles/mutations';
 import { showToast } from '../ui/toast';
-import { useQueryClient } from '@tanstack/react-query';
 import { resolveModelForProvider } from '../../utils/modelMapping';
+import { queryKeys } from '../../lib/queryClient';
+import { aiProviders } from '../../api/ai';
 
 interface AiDashboardProps {
   open: boolean;
@@ -34,7 +35,14 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
   
   // Get active profile and its AI configs
   const { data: profile } = useActiveProfile();
-  const { providers } = useAiProvidersModalController(open);
+  
+  // Fetch providers directly here to avoid the heavy controller hook
+  const { data: providers = [] } = useQuery({
+    queryKey: queryKeys.aiProviders.list(),
+    queryFn: () => aiProviders.list().then(r => r.providers),
+    enabled: open,
+  });
+
   const updateProfile = useUpdateProfile();
   const createAiConfig = useCreateAiConfig();
 
@@ -138,7 +146,6 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
             providers={providers}
             activeProviderId={activeProviderId}
             onActiveProviderChange={handleActiveProviderChange}
-            isMobile={false}
           />
         )}
 
@@ -164,51 +171,37 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
             />
           )}
 
-          {/* Main Content Area */}
+          {/* Main Content Area - Conditionally render tabs for performance */}
           <main className="flex-1 overflow-hidden relative">
-            <div className={cn(
-              "h-full transition-all duration-200",
-              activeTab === 'providers' ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none absolute inset-0"
-            )}>
+            {activeTab === 'providers' && (
               <ProvidersTab
-                isMobile={isMobile}
                 activeProviderId={activeProviderId}
                 onActiveProviderChange={handleActiveProviderChange}
                 selectedModelId={profile?.selectedModelId || null}
                 onSelectModel={handleModelChange}
               />
-            </div>
+            )}
             
-            <div className={cn(
-              "h-full transition-all duration-200",
-              activeTab === 'models' ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none absolute inset-0"
-            )}>
+            {activeTab === 'models' && (
               <ModelsTab 
-                isMobile={isMobile} 
                 activeProviderId={activeProviderId} 
                 activeProviderLabel={activeProviderLabel}
                 selectedModelId={profile?.selectedModelId || null}
                 onSelectModel={handleModelChange}
               />
-            </div>
+            )}
             
-            <div className={cn(
-              "h-full transition-all duration-200",
-              activeTab === 'costs' ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none absolute inset-0"
-            )}>
-              <CostsTab isMobile={isMobile} activeProviderId={activeProviderId} />
-            </div>
+            {activeTab === 'costs' && (
+              <CostsTab activeProviderId={activeProviderId} />
+            )}
             
-            <div className={cn(
-              "h-full transition-all duration-200",
-              activeTab === 'logs' ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none absolute inset-0"
-            )}>
-              <LogsTab isMobile={isMobile} activeProviderId={activeProviderId} />
-            </div>
+            {activeTab === 'logs' && (
+              <LogsTab activeProviderId={activeProviderId} />
+            )}
           </main>
 
           {/* Quick Actions Bar */}
-          <QuickActionsBar isMobile={isMobile} />
+          <QuickActionsBar />
         </div>
       </DialogContent>
     </Dialog>

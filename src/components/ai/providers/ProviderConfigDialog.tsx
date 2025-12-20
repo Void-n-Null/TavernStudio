@@ -16,12 +16,12 @@ import {
 } from '../../ui/dialog';
 import { AuthStrategyForm, type SecretDraftKey } from './AuthStrategyForm';
 import { ModelSelector } from '../ModelSelector';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 
 interface ProviderConfigDialogProps {
   provider: AiProviderStatus | null;
   isOpen: boolean;
   onClose: () => void;
-  isMobile: boolean;
   secretDrafts: Record<SecretDraftKey, string>;
   setSecretDrafts: React.Dispatch<React.SetStateAction<Record<SecretDraftKey, string>>>;
   onSaveAndConnect: (providerId: string, strategyId: string, requiredKeys: string[]) => void;
@@ -37,7 +37,6 @@ export function ProviderConfigDialog({
   provider,
   isOpen,
   onClose,
-  isMobile,
   secretDrafts,
   setSecretDrafts,
   onSaveAndConnect,
@@ -48,6 +47,7 @@ export function ProviderConfigDialog({
   selectedModelId,
   onSelectModel,
 }: ProviderConfigDialogProps) {
+  const isMobile = useIsMobile();
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null);
 
   if (!provider) return null;
@@ -171,7 +171,6 @@ export function ProviderConfigDialog({
                 isSaving={isSaving}
                 isConnecting={isConnecting}
                 isConnected={isConnected && provider.connection?.auth_strategy_id === selectedStrategy.id}
-                isMobile={isMobile}
               />
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">

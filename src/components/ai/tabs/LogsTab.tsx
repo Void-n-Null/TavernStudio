@@ -16,15 +16,16 @@ import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 
 interface LogsTabProps {
-  isMobile: boolean;
   activeProviderId?: string | null;
 }
 
 type LogView = 'all' | 'errors';
 
-export function LogsTab({ isMobile, activeProviderId }: LogsTabProps) {
+export function LogsTab({ activeProviderId }: LogsTabProps) {
+  const isMobile = useIsMobile();
   const [view, setView] = useState<LogView>('all');
   const [modelFilter, setModelFilter] = useState('');
   const [limit, setLimit] = useState(50);
@@ -139,7 +140,6 @@ export function LogsTab({ isMobile, activeProviderId }: LogsTabProps) {
                 log={log}
                 expanded={expandedLog === log.id}
                 onToggle={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
-                isMobile={isMobile}
               />
             ))}
           </div>
@@ -153,13 +153,12 @@ function LogRow({
   log,
   expanded,
   onToggle,
-  isMobile,
 }: {
   log: AiRequestLog;
   expanded: boolean;
   onToggle: () => void;
-  isMobile: boolean;
 }) {
+  const isMobile = useIsMobile();
   const isError = log.status === 'error';
   const displayModel = log.model_slug.split('/').pop() || log.model_slug;
   const provider = log.model_slug.split('/')[0] || '';
