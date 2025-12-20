@@ -33,7 +33,7 @@ export function VirtualizedModelList({
     return () => observer.disconnect();
   }, []);
 
-  const ITEM_HEIGHT = isMobile ? 80 : 72;
+  const ITEM_HEIGHT = isMobile ? 80 : 76;
 
   const Row = useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
     const model = models[index];

@@ -19,9 +19,19 @@ interface ModelsTabProps {
   isMobile: boolean;
   activeProviderId?: string | null;
   activeProviderLabel?: string | null;
+  /** Currently selected model ID from the profile's AI config */
+  selectedModelId?: string | null;
+  /** Callback when user selects a model - updates the profile's AI config */
+  onSelectModel?: (modelId: string) => void;
 }
 
-export function ModelsTab({ isMobile, activeProviderId, activeProviderLabel }: ModelsTabProps) {
+export function ModelsTab({ 
+  isMobile, 
+  activeProviderId, 
+  activeProviderLabel,
+  selectedModelId,
+  onSelectModel,
+}: ModelsTabProps) {
   const {
     mode,
     setMode,
@@ -31,7 +41,6 @@ export function ModelsTab({ isMobile, activeProviderId, activeProviderLabel }: M
     setProviderFilter,
     showFreeOnly,
     setShowFreeOnly,
-    selectedModelSlug,
     models,
     isLoading,
     isFetching,
@@ -39,7 +48,7 @@ export function ModelsTab({ isMobile, activeProviderId, activeProviderLabel }: M
     currentModel,
     handleSelectModel,
     refetchOpenRouter,
-  } = useModelsTab({ activeProviderId });
+  } = useModelsTab({ activeProviderId, selectedModelId, onSelectModel });
 
   // ============ DASHBOARD MODE ============
   if (mode === 'dashboard') {
@@ -80,7 +89,7 @@ export function ModelsTab({ isMobile, activeProviderId, activeProviderLabel }: M
             model={currentModel} 
             onChangeModel={() => setMode('browse')}
           />
-        ) : selectedModelSlug ? (
+        ) : selectedModelId ? (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-8">
             <div className="flex items-center gap-4 mb-6">
               <div className="h-14 w-14 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
@@ -88,10 +97,10 @@ export function ModelsTab({ isMobile, activeProviderId, activeProviderLabel }: M
               </div>
               <div>
                 <div className="text-xs font-bold uppercase text-zinc-500 mb-1">
-                  {selectedModelSlug.split('/')[0]}
+                  {selectedModelId.split('/')[0]}
                 </div>
                 <h3 className="text-xl font-bold text-zinc-100">
-                  {selectedModelSlug.split('/').pop()}
+                  {selectedModelId.split('/').pop()}
                 </h3>
               </div>
             </div>
@@ -119,7 +128,7 @@ export function ModelsTab({ isMobile, activeProviderId, activeProviderLabel }: M
         {/* Recent Models */}
         <RecentModelsGrid 
           onSelect={handleSelectModel}
-          currentSlug={selectedModelSlug}
+          currentSlug={selectedModelId}
           allModels={models}
         />
       </div>
@@ -213,7 +222,7 @@ export function ModelsTab({ isMobile, activeProviderId, activeProviderLabel }: M
         ) : (
           <VirtualizedModelList
             models={filteredModels}
-            selectedSlug={selectedModelSlug}
+            selectedSlug={selectedModelId}
             onSelect={handleSelectModel}
             isMobile={isMobile}
           />

@@ -6,19 +6,22 @@ import { addToRecentModels } from '../../QuickActionsBar';
 
 export interface UseModelsTabProps {
   activeProviderId?: string | null;
+  /** Currently selected model ID from the profile's AI config */
+  selectedModelId?: string | null;
+  /** Callback when user selects a model - updates the profile's AI config */
+  onSelectModel?: (modelId: string) => void;
 }
 
-export function useModelsTab({ activeProviderId }: UseModelsTabProps) {
+export function useModelsTab({ activeProviderId, selectedModelId, onSelectModel }: UseModelsTabProps) {
   const [mode, setMode] = useState<'dashboard' | 'browse'>('dashboard');
   const [search, setSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
   const [showFreeOnly, setShowFreeOnly] = useState(false);
   
-  // Get currently selected model from localStorage
-  const [selectedModelSlug, setSelectedModelSlug] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return 'openai/gpt-4o-mini';
-    return localStorage.getItem('tavernstudio:selectedModel') || 'openai/gpt-4o-mini';
-  });
+  // Use selectedModelId from profile if provided, otherwise fallback to localStorage
+  const selectedModelSlug = selectedModelId || (typeof window !== 'undefined' 
+    ? localStorage.getItem('tavernstudio:selectedModel') 
+    : null) || 'openai/gpt-4o-mini';
 
   // Fetch OpenRouter models (always fetch for dashboard stats)
   const { data: openRouterModelsData, isLoading: isLoadingOpenRouter, refetch: refetchOpenRouter, isFetching } = useQuery({
@@ -133,12 +136,18 @@ export function useModelsTab({ activeProviderId }: UseModelsTabProps) {
   }, [selectedModelSlug, models]);
 
   const handleSelectModel = useCallback((slug: string) => {
+    // Update localStorage for fallback/recent models tracking
     localStorage.setItem('tavernstudio:selectedModel', slug);
     addToRecentModels(slug);
-    setSelectedModelSlug(slug);
+    
+    // Call the profile update callback if provided
+    if (onSelectModel) {
+      onSelectModel(slug);
+    }
+    
     setMode('dashboard');
     window.dispatchEvent(new Event('storage'));
-  }, []);
+  }, [onSelectModel]);
 
   return {
     mode,
@@ -149,7 +158,7 @@ export function useModelsTab({ activeProviderId }: UseModelsTabProps) {
     setProviderFilter,
     showFreeOnly,
     setShowFreeOnly,
-    selectedModelSlug,
+    // selectedModelSlug is now derived from props, not local state
     models,
     isLoading,
     isFetching,

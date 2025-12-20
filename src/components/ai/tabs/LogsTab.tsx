@@ -269,14 +269,9 @@ function LogRow({
             <DetailItem label="Cost" value={log.calculated_cost_usd ? `$${log.calculated_cost_usd.toFixed(6)}` : '-'} />
           </div>
 
-          {/* Metadata */}
-          {log.request_metadata && Object.keys(log.request_metadata).length > 0 && (
-            <div>
-              <div className="text-xs text-zinc-500 mb-1.5">Metadata</div>
-              <pre className="rounded-lg bg-zinc-800/50 p-2 text-xs text-zinc-300 overflow-auto max-h-32">
-                {JSON.stringify(log.request_metadata, null, 2)}
-              </pre>
-            </div>
+          {/* Request Metadata */}
+          {log.request_metadata && (
+            <RequestMetadataDisplay metadata={log.request_metadata as Record<string, unknown>} />
           )}
         </div>
       )}
@@ -289,6 +284,149 @@ function DetailItem({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-[10px] uppercase text-zinc-500 mb-0.5">{label}</div>
       <div className="text-xs text-zinc-300 font-mono truncate">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Expandable section for collapsing long content
+ */
+function ExpandableSection({ 
+  title, 
+  content, 
+  defaultExpanded = false,
+  badge,
+  dotColor = 'bg-blue-500'
+}: { 
+  title: string; 
+  content: React.ReactNode; 
+  defaultExpanded?: boolean;
+  badge?: string;
+  dotColor?: string;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  
+  return (
+    <div className="border border-zinc-800/50 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 p-2 hover:bg-zinc-800/30 transition-colors text-left"
+      >
+        <span className={cn('h-2 w-2 rounded-full', dotColor)} />
+        <span className="text-xs text-zinc-400 flex-1">{title}</span>
+        {badge && <span className="text-[10px] text-zinc-600">{badge}</span>}
+        {expanded ? <ChevronUp className="h-3 w-3 text-zinc-600" /> : <ChevronDown className="h-3 w-3 text-zinc-600" />}
+      </button>
+      {expanded && (
+        <div className="border-t border-zinc-800/50 p-3 bg-zinc-900/30">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Display component for request metadata with full payload inspection
+ */
+function RequestMetadataDisplay({ metadata }: { metadata: Record<string, unknown> }) {
+  // Handle both old format (nested in request) and new format (flat)
+  const request = metadata.request as {
+    messages?: Array<{ role: string; content: string }>;
+    messageCount?: number;
+    params?: Record<string, unknown>;
+  } | undefined;
+  
+  // Support both nested and flat message formats
+  const messages = request?.messages ?? metadata.messages as Array<{ role: string; content: string }> | undefined;
+  const params = request?.params ?? metadata.params as Record<string, unknown> | undefined;
+  const response = metadata.response as string | null;
+  const responseLength = metadata.responseLength as number | undefined;
+  
+  return (
+    <div className="space-y-2">
+      {/* Full Messages Array - this is THE payload now */}
+      {messages && messages.length > 0 && (
+        <ExpandableSection
+          title="Messages Payload"
+          badge={`${messages.length} messages`}
+          dotColor="bg-blue-500"
+          defaultExpanded={true}
+          content={
+            <div className="space-y-2 max-h-96 overflow-auto">
+              {messages.map((msg, i) => (
+                <div key={i} className="border-l-2 pl-2" style={{
+                  borderColor: msg.role === 'assistant' ? '#10b981' : 
+                               msg.role === 'system' ? '#8b5cf6' : '#3b82f6'
+                }}>
+                  <div className="text-[10px] uppercase text-zinc-500 mb-0.5 flex items-center gap-2">
+                    <span className={cn(
+                      'px-1.5 py-0.5 rounded text-[9px]',
+                      msg.role === 'assistant' ? 'bg-emerald-500/20 text-emerald-400' :
+                      msg.role === 'system' ? 'bg-violet-500/20 text-violet-400' :
+                      'bg-blue-500/20 text-blue-400'
+                    )}>
+                      {msg.role}
+                    </span>
+                    <span className="text-zinc-600">{msg.content.length} chars</span>
+                  </div>
+                  <pre className="text-xs text-zinc-300 font-mono whitespace-pre-wrap">
+                    {msg.content}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          }
+        />
+      )}
+      
+      {/* Generation Parameters */}
+      {params && Object.keys(params).length > 0 && (
+        <ExpandableSection
+          title="Generation Parameters"
+          dotColor="bg-amber-500"
+          content={
+            <pre className="text-xs text-zinc-400 font-mono">
+              {JSON.stringify(params, null, 2)}
+            </pre>
+          }
+        />
+      )}
+      
+      {/* Full Response */}
+      {response && (
+        <ExpandableSection
+          title="AI Response"
+          badge={`${responseLength ?? response.length} chars`}
+          dotColor="bg-emerald-500"
+          defaultExpanded={false}
+          content={
+            <pre className="text-xs text-zinc-300 font-mono whitespace-pre-wrap max-h-64 overflow-auto">
+              {response}
+            </pre>
+          }
+        />
+      )}
+      
+      {/* Raw metadata for anything else */}
+      {Object.keys(metadata).some(k => !['request', 'response', 'responseLength', 'messages', 'messageCount', 'params'].includes(k)) && (
+        <ExpandableSection
+          title="Other Metadata"
+          dotColor="bg-zinc-500"
+          content={
+            <pre className="text-xs text-zinc-400 font-mono overflow-auto max-h-32">
+              {JSON.stringify(
+                Object.fromEntries(
+                  Object.entries(metadata).filter(
+                    ([k]) => !['request', 'response', 'responseLength', 'messages', 'messageCount', 'params'].includes(k)
+                  )
+                ),
+                null, 2
+              )}
+            </pre>
+          }
+        />
+      )}
     </div>
   );
 }

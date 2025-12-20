@@ -165,6 +165,8 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
                 isMobile={isMobile} 
                 activeProviderId={activeProviderId} 
                 activeProviderLabel={activeProviderLabel}
+                selectedModelId={activeAiConfig?.modelId || null}
+                onSelectModel={handleModelChange}
               />
             </div>
             
