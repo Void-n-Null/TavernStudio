@@ -51,10 +51,10 @@ export const aiProviders = {
       body: JSON.stringify(secrets),
     }),
 
-  connect: (providerId: string, authStrategyId: string) =>
+  connect: (providerId: string, authStrategyId?: string | null) =>
     api<{ success: boolean }>(`/ai/providers/${providerId}/connect`, {
       method: 'POST',
-      body: JSON.stringify({ authStrategyId }),
+      body: JSON.stringify(authStrategyId ? { authStrategyId } : {}),
     }),
 
   disconnect: (providerId: string) =>
@@ -87,6 +87,10 @@ export interface OpenRouterModelEndpoint {
   context_length: number;
   provider_name: string;
   provider_display_name: string;
+  /** Provider slug used for routing (e.g., "deepinfra", "together/fp8") */
+  provider_slug: string;
+  /** Quantization level if applicable (e.g., "fp8", "int4") */
+  quantization?: string;
   pricing: OpenRouterModelPricing;
   is_free: boolean;
   supports_reasoning: boolean;
@@ -107,6 +111,8 @@ export interface OpenRouterModel {
   supports_reasoning: boolean;
   hidden: boolean;
   permaslug: string;
+  /** Default provider order for this model (provider slugs) */
+  default_order?: string[];
   endpoint?: OpenRouterModelEndpoint;
 }
 

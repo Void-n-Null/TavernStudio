@@ -7,6 +7,25 @@
 import { API_BASE } from './base';
 import type { ModelMessage } from 'ai';
 
+/**
+ * OpenRouter-specific provider routing configuration.
+ * Passed to the OpenRouter API via providerOptions.openrouter.provider
+ */
+export interface OpenRouterProviderRouting {
+  /** Provider slugs to try in order (e.g., ["anthropic", "together"]) */
+  order?: string[];
+  /** Provider slugs to exclude from routing */
+  ignore?: string[];
+  /** Exclusive provider list - only use these providers */
+  allow?: string[];
+  /** Enable/disable automatic fallback to other providers (default: true) */
+  allow_fallbacks?: boolean;
+  /** Only use providers that support all parameters in request (default: false) */
+  require_parameters?: boolean;
+  /** Allowed quantization levels (e.g., ["fp16", "int8"]) */
+  quantizations?: string[];
+}
+
 export interface GenerateRequest {
   providerId: string;
   modelId: string;
@@ -25,6 +44,13 @@ export interface GenerateRequest {
     presencePenalty?: number;
     frequencyPenalty?: number;
     stopSequences?: string[];
+  };
+  /**
+   * OpenRouter-specific configuration for provider routing.
+   * Only used when providerId is 'openrouter'.
+   */
+  openRouterConfig?: {
+    provider?: OpenRouterProviderRouting;
   };
 }
 
