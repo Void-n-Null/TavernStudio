@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Plus } from 'lucide-react';
+import { Send, Plus, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { showToast } from '../ui/toast';
@@ -10,11 +10,13 @@ import { useChatComposerStyles } from '../../hooks/useChatComposerStyles';
 import { useChatComposerEvents } from '../../hooks/useChatComposerEvents';
 import { useTextareaHeight } from '../../hooks/useTextareaHeight';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useChatOrchestration } from '../../hooks/useChatOrchestration';
 
 export function ChatComposer() {
   const layout = useLayoutConfig();
   const composer = useComposerConfig();
   const { tailId, speakers, nodes, addMessage, isAddingMessage } = useServerChat();
+  const { isGenerating, generate, cancel } = useChatOrchestration();
 
   const draft = useChatComposerDraft();
   const setDraft = useChatComposerStore((s) => s.setDraft);
@@ -41,13 +43,14 @@ export function ChatComposer() {
   const { syncHeight: syncTextareaHeight } = useTextareaHeight(textareaRef, value);
   
   const isEmpty = !value.trim();
+  const isBusy = isAddingMessage || isGenerating;
   const { containerWidthStyle, surfaceStyle, sendButtonStyle } = useChatComposerStyles(
     composer,
     layout,
     isFocused,
     isMobile,
     isEmpty,
-    isAddingMessage
+    isBusy
   );
 
   const send = useCallback(async () => {
@@ -65,16 +68,23 @@ export function ChatComposer() {
     }
 
     try {
+      // Add the user's message
       await addMessage(tailId, content, userSpeakerId, false);
       clear();
       requestAnimationFrame(() => {
         syncTextareaHeight();
       });
+      
+      // Trigger AI generation for the bot response
+      // Small delay to ensure the message is in the tree
+      setTimeout(() => {
+        generate();
+      }, 50);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to send message.';
       showToast({ message: msg, type: 'error' });
     }
-  }, [addMessage, clear, syncTextareaHeight, tailId, userSpeakerId, value]);
+  }, [addMessage, clear, generate, syncTextareaHeight, tailId, userSpeakerId, value]);
 
   // Sync selection from store to DOM
   useEffect(() => {
@@ -235,13 +245,28 @@ export function ChatComposer() {
               />
             </div>
 
-            {composer.sendButtonType === 'hidden' ? null : (
+            {composer.sendButtonType === 'hidden' ? null : isGenerating ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size={composer.sendButtonType === 'icon' ? 'icon' : 'default'}
+                className="chat-composer-stop shrink-0"
+                onClick={cancel}
+                aria-label="Stop generating"
+              >
+                {composer.sendButtonType === 'icon' ? (
+                  <Square className="h-4 w-4" />
+                ) : (
+                  <span>Stop</span>
+                )}
+              </Button>
+            ) : (
               <Button
                 type="submit"
                 variant={isEmpty ? 'secondary' : 'default'}
                 size={composer.sendButtonType === 'icon' ? 'icon' : 'default'}
                 className={cn('chat-composer-send shrink-0', isEmpty ? 'opacity-70' : undefined)}
-                disabled={isAddingMessage || isEmpty}
+                disabled={isBusy || isEmpty}
                 aria-label="Send"
                 style={sendButtonStyle}
               >
