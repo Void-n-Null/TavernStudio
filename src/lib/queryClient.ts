@@ -70,4 +70,11 @@ export const queryKeys = {
     trend: (filters?: Record<string, unknown>) => [...queryKeys.aiRequestLogs.all, 'trend', filters] as const,
     errors: (filters?: Record<string, unknown>) => [...queryKeys.aiRequestLogs.all, 'errors', filters] as const,
   },
+
+  // Character cards
+  characterCards: {
+    all: ['characterCards'] as const,
+    list: () => [...queryKeys.characterCards.all, 'list'] as const,
+    detail: (id: string) => [...queryKeys.characterCards.all, 'detail', id] as const,
+  },
 };

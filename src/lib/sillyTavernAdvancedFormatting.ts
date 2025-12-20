@@ -44,6 +44,8 @@ export type StSystemPromptTemplate = {
   content: string;
   post_history?: string;
   prefill?: string;
+  /** Whether to show the prefill text in the UI while generating */
+  showPrefillWhileStreaming?: boolean;
 };
 
 export type StReasoningTemplate = {

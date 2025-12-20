@@ -64,11 +64,11 @@ export const characterCards = {
     }),
 
   getAvatarUrl: (id: string, version?: string | null) => {
-    const url = `${BASE_PATH}/${id}/avatar`;
+    const url = `/api${BASE_PATH}/${id}/avatar`;
     return version ? `${url}?v=${encodeURIComponent(version)}` : url;
   },
 
-  getExportPngUrl: (id: string) => `${BASE_PATH}/${id}/export/png`,
-  getExportJsonUrl: (id: string) => `${BASE_PATH}/${id}/export/json`,
+  getExportPngUrl: (id: string) => `/api${BASE_PATH}/${id}/export/png`,
+  getExportJsonUrl: (id: string) => `/api${BASE_PATH}/${id}/export/json`,
 };
 
