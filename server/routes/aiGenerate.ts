@@ -82,6 +82,11 @@ async function getModelPricing(): Promise<Map<string, { inputPrice: number; outp
 interface GenerateRequest {
   providerId: string;
   modelId: string;
+  /**
+   * Optional OpenRouter model slug to use for pricing calculations.
+   * This allows cost analytics to work even when the provider-specific model ID differs.
+   */
+  pricingModelId?: string;
   messages: ModelMessage[];
   params?: {
     temperature?: number;
@@ -113,7 +118,7 @@ aiGenerateRoutes.post('/stream', async (c) => {
 
   try {
     const body = await c.req.json<GenerateRequest>();
-    const { providerId, modelId, messages, params } = body;
+    const { providerId, modelId, pricingModelId, messages, params } = body;
 
     if (!providerId || !modelId) {
       return c.json({ error: 'Missing providerId or modelId' }, 400);
@@ -165,13 +170,15 @@ aiGenerateRoutes.post('/stream', async (c) => {
 
     // Fetch model pricing for cost calculation
     const pricingMap = await getModelPricing();
-    const pricing = pricingMap.get(modelId);
+    const pricingKey = pricingModelId || modelId;
+    const pricing = pricingMap.get(pricingKey);
 
     // Capture response text for logging
     let responseText = '';
     
     // Build FULL request metadata for logging
     const requestMetadata = {
+      pricingModelId: pricingModelId || null,
       messages: messages.map(m => ({
         role: m.role,
         content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),

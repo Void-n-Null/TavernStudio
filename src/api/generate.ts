@@ -10,6 +10,12 @@ import type { ModelMessage } from 'ai';
 export interface GenerateRequest {
   providerId: string;
   modelId: string;
+  /**
+   * Optional "pricing identity" for the request.
+   * Use this when the provider-specific model ID differs from the OpenRouter slug
+   * (e.g. provider modelId: "gpt-4o-mini" vs pricingModelId: "openai/gpt-4o-mini").
+   */
+  pricingModelId?: string;
   messages: ModelMessage[];
   params?: {
     temperature?: number;

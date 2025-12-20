@@ -241,6 +241,9 @@ export function useChatOrchestration(): ChatOrchestrationResult {
       const request: GenerateRequest = {
         providerId: activeAiConfig.providerId,
         modelId: providerModelId, // Use the resolved model ID
+        // Preserve the universal model ID (usually an OpenRouter slug) so the server
+        // can compute costs using OpenRouter pricing even when using a different provider.
+        pricingModelId: currentProfile.selectedModelId ?? undefined,
         messages, 
         params: activeAiConfig.params as GenerateRequest['params'],
       };
