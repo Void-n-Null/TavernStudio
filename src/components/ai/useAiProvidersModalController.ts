@@ -32,10 +32,6 @@ export type AiProvidersModalController = {
   disconnect: () => Promise<void>;
   startPkce: () => Promise<void>;
   
-  // Model selection
-  selectedModelId: string | null;
-  selectModel: (modelId: string) => void;
-  
   // Loading states
   isSaving: boolean;
   isConnecting: boolean;
@@ -91,122 +87,94 @@ export function useAiProvidersModalController(open: boolean): AiProvidersModalCo
     setSecretDrafts({});
   }, []);
 
-  // Model selection (persisted in localStorage for now)
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('tavernstudio:selectedModel') || 'openai/gpt-4o-mini';
-    }
-    return 'openai/gpt-4o-mini';
-  });
-
-  const selectModel = useCallback((modelId: string) => {
-    setSelectedModelId(modelId);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('tavernstudio:selectedModel', modelId);
-    }
-    showToast({ message: `Model set to ${modelId}`, type: 'success' });
-  }, []);
-
   // Mutations
   const setSecretsMutation = useMutation({
-    mutationFn: async (args: { providerId: string; authStrategyId: string; secrets: Record<string, string> }) => {
-      return await aiProviders.setSecrets(args.providerId, args.authStrategyId, args.secrets);
+    mutationFn: ({ providerId, authStrategyId, secrets }: { providerId: string; authStrategyId: string; secrets: Record<string, string> }) =>
+      aiProviders.setSecrets(providerId, authStrategyId, secrets),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.aiProviders.list() });
     },
-    onSuccess: async () => {
-      showToast({ message: 'Saved credentials', type: 'success' });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.aiProviders.all });
-    },
-    onError: (e) => showToast({ message: e instanceof Error ? e.message : String(e), type: 'error' }),
   });
 
   const connectMutation = useMutation({
-    mutationFn: async (args: { providerId: string; authStrategyId: string }) => {
-      return await aiProviders.connect(args.providerId, args.authStrategyId);
+    mutationFn: ({ providerId, authStrategyId }: { providerId: string; authStrategyId: string }) =>
+      aiProviders.connect(providerId, authStrategyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.aiProviders.list() });
     },
-    onSuccess: async () => {
-      showToast({ message: 'Connected successfully', type: 'success' });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.aiProviders.all });
-    },
-    onError: (e) => showToast({ message: e instanceof Error ? e.message : String(e), type: 'error' }),
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: async (args: { providerId: string }) => {
-      return await aiProviders.disconnect(args.providerId);
+    mutationFn: (providerId: string) => aiProviders.disconnect(providerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.aiProviders.list() });
     },
-    onSuccess: async () => {
-      showToast({ message: 'Disconnected', type: 'info' });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.aiProviders.all });
-    },
-    onError: (e) => showToast({ message: e instanceof Error ? e.message : String(e), type: 'error' }),
   });
 
-  // Action handlers
   const saveSecrets = useCallback(async (authStrategyId: string) => {
     if (!selectedProvider) return;
     
-    const strategy = selectedProvider.authStrategies.find(s => s.id === authStrategyId);
-    if (!strategy) return;
-
+    // Filter drafts for this provider and strategy
+    const prefix = `${selectedProvider.id}:${authStrategyId}:`;
     const secrets: Record<string, string> = {};
-    for (const k of strategy.requiredKeys) {
-      const dk: SecretDraftKey = `${selectedProvider.id}:${authStrategyId}:${k}`;
-      const v = (secretDrafts[dk] ?? '').trim();
-      if (v) secrets[k] = v;
-    }
-
-    if (Object.keys(secrets).length === 0) {
-      showToast({ message: 'No credentials entered', type: 'warning' });
-      return;
-    }
-
-    await setSecretsMutation.mutateAsync({
-      providerId: selectedProvider.id,
-      authStrategyId,
-      secrets,
+    Object.entries(secretDrafts).forEach(([key, value]) => {
+      if (key.startsWith(prefix)) {
+        const secretKey = key.slice(prefix.length);
+        secrets[secretKey] = value;
+      }
     });
-  }, [selectedProvider, secretDrafts, setSecretsMutation]);
 
-  const connect = useCallback(async (authStrategyId: string) => {
-    if (!selectedProvider) return;
-    await connectMutation.mutateAsync({
-      providerId: selectedProvider.id,
-      authStrategyId,
-    });
-  }, [selectedProvider, connectMutation]);
+    if (Object.keys(secrets).length === 0) return;
 
-  const saveAndConnect = useCallback(async (authStrategyId: string) => {
-    if (!selectedProvider) return;
-    
-    const strategy = selectedProvider.authStrategies.find(s => s.id === authStrategyId);
-    if (!strategy) return;
-
-    const secrets: Record<string, string> = {};
-    for (const k of strategy.requiredKeys) {
-      const dk: SecretDraftKey = `${selectedProvider.id}:${authStrategyId}:${k}`;
-      const v = (secretDrafts[dk] ?? '').trim();
-      if (v) secrets[k] = v;
-    }
-
-    if (Object.keys(secrets).length > 0) {
+    try {
       await setSecretsMutation.mutateAsync({
         providerId: selectedProvider.id,
         authStrategyId,
         secrets,
       });
+      showToast({ message: `Secrets saved for ${selectedProvider.label}`, type: 'success' });
+      // Clear drafts for this specific combination
+      setSecretDrafts(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(key => {
+          if (key.startsWith(prefix)) delete next[key as SecretDraftKey];
+        });
+        return next;
+      });
+    } catch (e) {
+      showToast({ message: e instanceof Error ? e.message : String(e), type: 'error' });
     }
+  }, [selectedProvider, secretDrafts, setSecretsMutation]);
 
-    await connectMutation.mutateAsync({
-      providerId: selectedProvider.id,
-      authStrategyId,
-    });
-  }, [selectedProvider, secretDrafts, setSecretsMutation, connectMutation]);
+  const connect = useCallback(async (authStrategyId: string) => {
+    if (!selectedProvider) return;
+    try {
+      await connectMutation.mutateAsync({
+        providerId: selectedProvider.id,
+        authStrategyId,
+      });
+      showToast({ message: `Connected to ${selectedProvider.label}`, type: 'success' });
+    } catch (e) {
+      showToast({ message: e instanceof Error ? e.message : String(e), type: 'error' });
+    }
+  }, [selectedProvider, connectMutation]);
+
+  const saveAndConnect = useCallback(async (authStrategyId: string) => {
+    await saveSecrets(authStrategyId);
+    await connect(authStrategyId);
+  }, [saveSecrets, connect]);
 
   const disconnect = useCallback(async () => {
     if (!selectedProvider) return;
-    await disconnectMutation.mutateAsync({ providerId: selectedProvider.id });
+    try {
+      await disconnectMutation.mutateAsync(selectedProvider.id);
+      showToast({ message: `Disconnected from ${selectedProvider.label}`, type: 'success' });
+    } catch (e) {
+      showToast({ message: e instanceof Error ? e.message : String(e), type: 'error' });
+    }
   }, [selectedProvider, disconnectMutation]);
 
+  // Model selection (persisted in localStorage for now)
   const startPkce = useCallback(async () => {
     try {
       const returnUrl = window.location.origin;
@@ -233,8 +201,6 @@ export function useAiProvidersModalController(open: boolean): AiProvidersModalCo
     saveAndConnect,
     disconnect,
     startPkce,
-    selectedModelId,
-    selectModel,
     isSaving: setSecretsMutation.isPending,
     isConnecting: connectMutation.isPending,
     isDisconnecting: disconnectMutation.isPending,

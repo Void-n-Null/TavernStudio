@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { openRouterModels, aiProviders, type OpenRouterModel } from '../../../../api/ai';
 import { queryKeys } from '../../../../lib/queryClient';
 import { addToRecentModels } from '../../QuickActionsBar';
+import { cleanModelId } from '../../../../utils/modelMapping';
 
 export interface UseModelsTabProps {
   activeProviderId?: string | null;
@@ -18,10 +19,8 @@ export function useModelsTab({ activeProviderId, selectedModelId, onSelectModel 
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
   const [showFreeOnly, setShowFreeOnly] = useState(false);
   
-  // Use selectedModelId from profile if provided, otherwise fallback to localStorage
-  const selectedModelSlug = selectedModelId || (typeof window !== 'undefined' 
-    ? localStorage.getItem('tavernstudio:selectedModel') 
-    : null) || 'openai/gpt-4o-mini';
+  // Use selectedModelId from profile if provided, otherwise fallback
+  const selectedModelSlug = selectedModelId || 'openai/gpt-4o-mini';
 
   // Fetch OpenRouter models (always fetch for dashboard stats)
   const { data: openRouterModelsData, isLoading: isLoadingOpenRouter, refetch: refetchOpenRouter, isFetching } = useQuery({
@@ -38,16 +37,6 @@ export function useModelsTab({ activeProviderId, selectedModelId, onSelectModel 
     enabled: !!activeProviderId && activeProviderId !== 'openrouter',
     staleTime: 10 * 60 * 1000,
   });
-
-  // Clean model ID for fuzzy matching
-  const cleanModelId = useCallback((id: string): string => {
-    return id
-      .toLowerCase()
-      .replace(/[-_]?20\d{6}/g, '')
-      .replace(/\d{6,}/g, '')
-      .replace(/[-_.]/g, '')
-      .trim();
-  }, []);
 
   const models = useMemo(() => {
     const orModels = openRouterModelsData ?? [];
@@ -73,7 +62,7 @@ export function useModelsTab({ activeProviderId, selectedModelId, onSelectModel 
           }
 
           return {
-            slug: `${activeProviderId}/${pm.id}`,
+            slug: pm.id.includes('/') ? pm.id : `${activeProviderId}/${pm.id}`,
             name: pm.label,
             short_name: pm.label,
             author: activeProviderId,
@@ -91,7 +80,7 @@ export function useModelsTab({ activeProviderId, selectedModelId, onSelectModel 
     }
 
     return orModels;
-  }, [openRouterModelsData, providerModelsData, activeProviderId, cleanModelId]);
+  }, [openRouterModelsData, providerModelsData, activeProviderId]);
 
   const isLoading = isLoadingOpenRouter || isLoadingProviderModels;
 
@@ -136,8 +125,7 @@ export function useModelsTab({ activeProviderId, selectedModelId, onSelectModel 
   }, [selectedModelSlug, models]);
 
   const handleSelectModel = useCallback((slug: string) => {
-    // Update localStorage for fallback/recent models tracking
-    localStorage.setItem('tavernstudio:selectedModel', slug);
+    // Update recent models tracking
     addToRecentModels(slug);
     
     // Call the profile update callback if provided

@@ -18,8 +18,10 @@ import { AiDashboardSidebar, type AiTabId } from './AiDashboardSidebar';
 import { AiDashboardMobileNav } from './AiDashboardMobileNav';
 import { useActiveProfile } from '../../hooks/queries/profiles/queries';
 import { useAiProvidersModalController } from './useAiProvidersModalController';
-import { useUpdateProfile, useCreateAiConfig, useUpdateAiConfig } from '../../hooks/queries/profiles/mutations';
+import { useUpdateProfile, useCreateAiConfig } from '../../hooks/queries/profiles/mutations';
 import { showToast } from '../ui/toast';
+import { useQueryClient } from '@tanstack/react-query';
+import { resolveModelForProvider } from '../../utils/modelMapping';
 
 interface AiDashboardProps {
   open: boolean;
@@ -35,7 +37,6 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
   const { providers } = useAiProvidersModalController(open);
   const updateProfile = useUpdateProfile();
   const createAiConfig = useCreateAiConfig();
-  const updateAiConfig = useUpdateAiConfig();
 
   const activeAiConfig = useMemo(() => 
     profile?.aiConfigs.find(c => c.id === profile.activeAiConfigId),
@@ -48,9 +49,21 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
     [providers, activeProviderId]
   );
 
-  const handleActiveProviderChange = (providerId: string) => {
+  const queryClient = useQueryClient();
+
+  const handleActiveProviderChange = async (providerId: string) => {
     if (!profile) return;
 
+    const currentModelId = profile.selectedModelId;
+    
+    // Check if the current global model can be mapped to the new provider
+    const mappedModelId = await resolveModelForProvider(
+      queryClient,
+      providerId,
+      currentModelId,
+      activeProviderId || undefined
+    );
+    
     // Find if an AI config already exists for this provider
     const existingConfig = profile.aiConfigs.find(c => c.providerId === providerId);
     
@@ -58,10 +71,17 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
       updateProfile.mutate({
         id: profile.id,
         data: { activeAiConfigId: existingConfig.id }
+      }, {
+        onSuccess: () => {
+          if (!mappedModelId && providerId !== 'openrouter') {
+            showToast({ message: `Current model not available on ${providerId}. Please select a model.`, type: 'info' });
+            setActiveTab('models');
+          }
+        }
       });
       showToast({ message: `Switched to ${providerId}`, type: 'success' });
     } else {
-      // Find the provider info to get a default strategy/model
+      // Find the provider info to get a default strategy
       const provider = providers.find(p => p.id === providerId);
       if (!provider) {
         showToast({ message: `Unknown provider: ${providerId}`, type: 'error' });
@@ -70,17 +90,20 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
 
       const strategy = provider.authStrategies.find(s => s.configured) || provider.authStrategies[0];
       
-      // Use the default model from provider UI metadata if available, otherwise fallback
-      const defaultModelId = provider.ui?.defaultModelId || 'openai/gpt-4o-mini';
-
       createAiConfig.mutate({
         profileId: profile.id,
         data: {
           name: `${provider.label} Config`,
           providerId,
           authStrategyId: strategy.id,
-          modelId: defaultModelId,
           isDefault: true // This will also set it as active profile config
+        }
+      }, {
+        onSuccess: () => {
+          if (!mappedModelId && providerId !== 'openrouter') {
+            showToast({ message: `Please select a model for ${provider.label}.`, type: 'info' });
+            setActiveTab('models');
+          }
         }
       });
       
@@ -89,15 +112,14 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
   };
 
   const handleModelChange = (modelId: string) => {
-    if (!profile || !activeAiConfig) return;
+    if (!profile) return;
 
-    updateAiConfig.mutate({
-      profileId: profile.id,
-      configId: activeAiConfig.id,
-      data: { modelId }
+    updateProfile.mutate({
+      id: profile.id,
+      data: { selectedModelId: modelId }
     });
 
-    showToast({ message: `Model updated to ${modelId}`, type: 'success' });
+    showToast({ message: `Global model updated to ${modelId}`, type: 'success' });
   };
 
   return (
@@ -152,7 +174,7 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
                 isMobile={isMobile}
                 activeProviderId={activeProviderId}
                 onActiveProviderChange={handleActiveProviderChange}
-                selectedModelId={activeAiConfig?.modelId || null}
+                selectedModelId={profile?.selectedModelId || null}
                 onSelectModel={handleModelChange}
               />
             </div>
@@ -165,7 +187,7 @@ export function AiDashboard({ open, onOpenChange }: AiDashboardProps) {
                 isMobile={isMobile} 
                 activeProviderId={activeProviderId} 
                 activeProviderLabel={activeProviderLabel}
-                selectedModelId={activeAiConfig?.modelId || null}
+                selectedModelId={profile?.selectedModelId || null}
                 onSelectModel={handleModelChange}
               />
             </div>

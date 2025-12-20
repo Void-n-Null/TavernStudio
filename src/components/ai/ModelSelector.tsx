@@ -13,6 +13,7 @@ import { openRouterModels, aiProviders, type OpenRouterModel } from '../../api/a
 import { queryKeys } from '../../lib/queryClient';
 import { cn } from '../../lib/utils';
 import { Input } from '../ui/input';
+import { cleanModelId } from '../../utils/modelMapping';
 
 interface ModelSelectorProps {
   value: string | null;
@@ -80,22 +81,6 @@ export function ModelSelector({ value, onChange, className, providerId }: ModelS
     staleTime: 10 * 60 * 1000,
   });
 
-  // Clean model ID for fuzzy matching
-  // Handles: claude-opus-4-5-20251101 → claudeopus45
-  //          claude-opus-4.5 → claudeopus45
-  const cleanModelId = useCallback((id: string): string => {
-    return id
-      .toLowerCase()
-      // First: Remove date suffixes like -20251101 or -20250929 (YYYYMMDD pattern)
-      .replace(/[-_]?20\d{6}/g, '')
-      // Remove any remaining 6+ digit sequences (other date formats)
-      .replace(/\d{6,}/g, '')
-      // Now remove punctuation (dashes, dots, underscores)
-      .replace(/[-_.]/g, '')
-      // Trim any trailing/leading whitespace
-      .trim();
-  }, []);
-
   const models = useMemo(() => {
     const orModels = openRouterModelsData ?? [];
     const pModels = providerModelsData ?? [];
@@ -141,7 +126,7 @@ export function ModelSelector({ value, onChange, className, providerId }: ModelS
     }
 
     return orModels;
-  }, [openRouterModelsData, providerModelsData, providerId, cleanModelId]);
+  }, [openRouterModelsData, providerModelsData, providerId]);
 
   const isLoading = isLoadingOpenRouter || isLoadingProviderModels;
 

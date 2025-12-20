@@ -10,15 +10,11 @@
 import { useState, useEffect } from 'react';
 import { Cpu, Star, Clock, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useActiveProfile } from '../../hooks/queries/profiles/queries';
+import { useUpdateProfile } from '../../hooks/queries/profiles/mutations';
 
 interface QuickActionsBarProps {
   isMobile: boolean;
-}
-
-// Get selected model from localStorage
-function getSelectedModel(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('tavernstudio:selectedModel');
 }
 
 // Get recent models from localStorage
@@ -71,19 +67,19 @@ export function togglePinnedModel(modelSlug: string): boolean {
 
 export function QuickActionsBar({ isMobile }: QuickActionsBarProps) {
   const [expanded, setExpanded] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const { data: profile } = useActiveProfile();
   const [recentModels, setRecentModels] = useState<string[]>([]);
   const [pinnedModels, setPinnedModels] = useState<string[]>([]);
 
+  const selectedModel = profile?.selectedModelId || null;
+
   // Load from localStorage on mount
   useEffect(() => {
-    setSelectedModel(getSelectedModel());
     setRecentModels(getRecentModels());
     setPinnedModels(getPinnedModels());
 
     // Listen for storage changes
     const handleStorage = () => {
-      setSelectedModel(getSelectedModel());
       setRecentModels(getRecentModels());
       setPinnedModels(getPinnedModels());
     };
@@ -205,11 +201,19 @@ function ModelChip({
   selected?: boolean;
   pinned?: boolean;
 }) {
+  const { data: profile } = useActiveProfile();
+  const updateProfile = useUpdateProfile();
   const displayName = model.split('/').pop() || model;
   const provider = model.split('/')[0] || '';
 
   const handleClick = () => {
-    localStorage.setItem('tavernstudio:selectedModel', model);
+    if (!profile) return;
+    
+    updateProfile.mutate({
+      id: profile.id,
+      data: { selectedModelId: model }
+    });
+    
     addToRecentModels(model);
     // Trigger storage event for other components
     window.dispatchEvent(new Event('storage'));
