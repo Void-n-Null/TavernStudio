@@ -14,6 +14,7 @@ import { useMessageListScrollFollow } from './hooks/useMessageListScrollFollow';
 import { useMessageListBranchSwitching } from './hooks/useMessageListBranchSwitching';
 import { useMessageListResize } from './hooks/useMessageListResize';
 import { useMessageListVisualStyles } from './hooks/useMessageListVisualStyles';
+import { useChatId } from './ChatContext';
 
 // Lazy rendering config - render last N messages, load more on scroll
 const INITIAL_RENDER_LIMIT = 100;
@@ -82,9 +83,10 @@ export function MessageList() {
 
   const queryClient = useQueryClient();
 
-  // Chat ID is stable (default chat), fetched once.
+  // Chat ID from context (specific chat page) or default chat (fallback)
+  const contextChatId = useChatId();
   const { data: defaultChatData } = useDefaultChatId();
-  const chatId = defaultChatData?.id ?? '';
+  const chatId = contextChatId ?? defaultChatData?.id ?? '';
 
   // Performance: subscribe only to active path node IDs (not full chat data).
   const activeNodeIds = useChatActivePathNodeIds();

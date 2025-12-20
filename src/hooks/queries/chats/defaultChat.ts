@@ -4,6 +4,7 @@ import { defaultChat } from '../../../api/misc';
 import type { ChatNode, Speaker } from '../../../types/chat';
 import { useChat } from './queries';
 import { useAddMessage, useDeleteMessage, useEditMessage, useSwitchBranch } from './mutations';
+import { useChatId } from '../../../components/chat/ChatContext';
 
 export function useDefaultChatId() {
   return useQuery({
@@ -14,8 +15,9 @@ export function useDefaultChatId() {
 }
 
 export function useServerChat() {
+  const contextChatId = useChatId();
   const { data: defaultChatData, isLoading: isLoadingId } = useDefaultChatId();
-  const chatId = defaultChatData?.id;
+  const chatId = contextChatId ?? defaultChatData?.id;
 
   const { data: chat, isLoading: isLoadingChat, error: chatError } = useChat(chatId);
 
@@ -110,13 +112,14 @@ export function useServerChat() {
 }
 
 export function useServerChatStatus(): { isLoading: boolean; error: Error | null } {
+  const contextChatId = useChatId();
   const { data: defaultChatData, isLoading: isLoadingId, error: defaultChatError } = useDefaultChatId();
-  const chatId = defaultChatData?.id;
+  const chatId = contextChatId ?? defaultChatData?.id;
 
   const chatQuery = useChat(chatId);
 
   return {
-    isLoading: isLoadingId || chatQuery.isLoading,
-    error: (defaultChatError ?? chatQuery.error) ?? null,
+    isLoading: contextChatId ? chatQuery.isLoading : (isLoadingId || chatQuery.isLoading),
+    error: contextChatId ? (chatQuery.error ?? null) : ((defaultChatError ?? chatQuery.error) ?? null),
   };
 }

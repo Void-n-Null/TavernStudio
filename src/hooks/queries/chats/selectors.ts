@@ -1,8 +1,9 @@
-                            import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../../../lib/queryClient';
 import { chats } from '../../../api/chats';
 import type { ChatNode, Speaker } from '../../../types/chat';
 import { useDefaultChatId } from './defaultChat';
+import { useChatId } from '../../../components/chat/ChatContext';
 
 type UnknownArray = unknown;
 
@@ -56,8 +57,9 @@ function sameSpeaker(a: unknown, b: unknown): boolean {
 }
 
 export function useChatActivePathNodeIds(): string[] {
+  const contextChatId = useChatId();
   const { data: defaultChatData } = useDefaultChatId();
-  const chatId = defaultChatData?.id;
+  const chatId = contextChatId ?? defaultChatData?.id;
 
   const { data } = useQuery({
     queryKey: queryKeys.chats.detail(chatId ?? ''),
@@ -94,8 +96,9 @@ export function useChatActivePathNodeIds(): string[] {
 }
 
 export function useChatNode(nodeId: string | null | undefined): ChatNode | null {
+  const contextChatId = useChatId();
   const { data: defaultChatData } = useDefaultChatId();
-  const chatId = defaultChatData?.id;
+  const chatId = contextChatId ?? defaultChatData?.id;
 
   const { data } = useQuery({
     queryKey: queryKeys.chats.detail(chatId ?? ''),
@@ -110,8 +113,9 @@ export function useChatNode(nodeId: string | null | undefined): ChatNode | null 
 }
 
 export function useChatSpeaker(speakerId: string | null | undefined): Speaker | null {
+  const contextChatId = useChatId();
   const { data: defaultChatData } = useDefaultChatId();
-  const chatId = defaultChatData?.id;
+  const chatId = contextChatId ?? defaultChatData?.id;
 
   const { data } = useQuery({
     queryKey: queryKeys.chats.detail(chatId ?? ''),
